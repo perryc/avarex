@@ -128,11 +128,19 @@ class IoScreenState extends State<IoScreen> {
                     }),
               ),
           ])),
+      ValueListenableBuilder<String>(
+          valueListenable: Storage().bleReceiver.scanError,
+          builder: (context, error, _) => error.isEmpty
+              ? const SizedBox.shrink()
+              : Padding(padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(error, style: const TextStyle(color: Colors.red)))),
       Expanded(child: StreamBuilder<List<fbp.ScanResult>>(
           stream: fbp.FlutterBluePlus.scanResults,
           initialData: const [],
           builder: (context, snapshot) {
-            List<fbp.ScanResult> found = snapshot.data ?? [];
+            List<fbp.ScanResult> found = (snapshot.data ?? [])
+                .where(BleReceiver.isReceiver)
+                .toList();
             return ListView(children: [
               for(fbp.ScanResult r in found)
                 if(!Storage().bleReceiver.links.any((l) => l.id == r.device.remoteId.str))

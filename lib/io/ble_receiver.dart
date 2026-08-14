@@ -47,21 +47,41 @@ class BleReceiver {
   List<BleLink> get links => _links.values.toList();
   bool get anyConnected => _links.values.any((l) => l.isConnected);
 
-  // scan for ADS-B receivers (and NUS fallback devices); results stream in
-  // FlutterBluePlus.scanResults
+  // last scan error, surfaced in the UI (Android can fail silently on
+  // permissions otherwise)
+  final ValueNotifier<String> scanError = ValueNotifier("");
+
+  // true if a scan result looks like an ADS-B receiver: advertises the ADSB
+  // or UART service, or carries a known receiver name. Scanning runs
+  // unfiltered and matches client-side - Android's firmware-level service
+  // filters miss some advertisers.
+  static bool isReceiver(ScanResult r) {
+    for(Guid uuid in r.advertisementData.serviceUuids) {
+      if(uuid == adsbService || uuid == nusService) {
+        return true;
+      }
+    }
+    String name = r.advertisementData.advName.isNotEmpty
+        ? r.advertisementData.advName
+        : r.device.platformName;
+    return RegExp(r'adsbee|softrf|stratux', caseSensitive: false).hasMatch(name);
+  }
+
+  // scan for ADS-B receivers; results stream in FlutterBluePlus.scanResults,
+  // filter with isReceiver()
   Future<void> scan() async {
     if(!supported || scanning.value) {
       return;
     }
     try {
       scanning.value = true;
-      await FlutterBluePlus.startScan(
-          withServices: [adsbService, nusService],
-          timeout: const Duration(seconds: 10));
+      scanError.value = "";
+      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 10));
       await FlutterBluePlus.isScanning.where((s) => s == false).first;
     }
     catch(e) {
       AppLog.logMessage("BLE scan failed: $e");
+      scanError.value = "Scan failed: $e";
     }
     finally {
       scanning.value = false;
