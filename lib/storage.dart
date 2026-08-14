@@ -56,6 +56,7 @@ import 'chart/download_manager.dart';
 import 'instruments/flight_timer.dart';
 import 'gdl90/message.dart';
 import 'package:avaremp/io/ble_receiver.dart';
+import 'package:avaremp/io/reception_logger.dart';
 import 'utils/geojson_parser.dart';
 import 'io/gps.dart';
 import 'io/gps_kalman.dart';
@@ -126,6 +127,7 @@ class Storage {
   final DownloadManager downloadManager = DownloadManager();
   final GeoJsonParser geoParser = GeoJsonParser();
   final BleReceiver bleReceiver = BleReceiver();
+  final ReceptionLogger receptionLogger = ReceptionLogger();
   List<bool> activeChecklistSteps = [];
   String activeChecklistName = "";
   static const gpsSwitchoverTimeMs = 30000; // switch GPS in 30 seconds
