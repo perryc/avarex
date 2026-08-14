@@ -52,8 +52,14 @@ the hardware is battery-powered.
   at most ~5 Hz per target. Ownship 1 Hz (if the receiver has GNSS),
   Status 1 Hz.
 - Vendor status/config replies use GDL90 ID 0x65 (long-established vendor
-  ID convention) with a TLV body; clients that don't understand 0x65 will
-  discard it harmlessly.
+  ID convention); clients that don't understand 0x65 will discard it
+  harmlessly. Defined subtypes (byte after the message ID):
+  - `0x01` **Per-band metrics** (1 Hz on Status): three little-endian u32
+    valid-frame counts for the last reporting interval - 1090ES
+    (squitter + extended squitter), 978 UAT ADS-B, 978 UAT uplink
+    (FIS-B). Standard traffic reports erase the receive band and the
+    heartbeat merges the counts, so this is how a client displays
+    per-band totals (accumulate client-side).
 
 ### Fragmentation (Uplink characteristic only)
 
