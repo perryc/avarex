@@ -6,6 +6,37 @@ AvareX is a pilot's all in one electronic flight bag solution.
 
 By Apps4Av.
 
+## BLE ADS-B Receivers (work in progress — this fork)
+
+This fork (`ble-adsb` branch) adds Bluetooth LE receiver support to AvareX:
+traffic/ownship/FIS-B stream over proper GATT characteristics instead of
+WiFi, so your tablet's WiFi stays free for a phone hotspot, and iOS/iPadOS
+work too (Bluetooth SPP never did). Interface spec:
+[docs/BLE_ADSB_SERVICE.md](docs/BLE_ADSB_SERVICE.md).
+
+Target receivers:
+
+- **[ADSBee 1090U](https://pantsforbirds.com/product/adsbee-1090u/)** —
+  open-source 1090ES (+978 UAT capable) receiver. BLE firmware lives in the
+  [perryc/adsbee fork, `ble-gdl90` branch](https://github.com/perryc/adsbee/tree/ble-gdl90):
+  typed GDL90 characteristics, FIS-B uplink fragmentation (hello
+  [CIFIB](https://cifib.ca)), and the full AT command console over BLE so
+  any serial terminal app can configure it wirelessly.
+- **[SoftRF Card Edition MkIII](https://github.com/lyusupov/SoftRF/wiki/Card-Edition-MkIII)**
+  (~US$42) — LoRa radio covering FANET/OGN glider and paraglider traffic;
+  connects as a second BLE receiver alongside the ADSBee (set it to
+  Bluetooth LE + GDL90 output).
+
+The "$42 TCAS" plan: ADSBee on 1090ES + SoftRF on FANET, both feeding one
+merged BLE traffic picture in AvareX — transponder traffic, gliders, and
+paragliders on one moving map, no WiFi juggling, for less than a fill-up.
+(It is, of course, not TCAS: unofficial data, no resolution advisories,
+not for navigation — it's extra eyes, not a certified system.)
+
+Note: on the ADSBee 1090U, BLE mode and WiFi mode are mutually exclusive
+(the ESP32-S3 module lacks the RAM to run both radios' stacks); switch
+modes with `AT+WIFI_AP` over USB or the BLE console.
+
 ## User Manual
 
 A comprehensive, code-derived user manual is available at:

@@ -73,7 +73,7 @@ class MainApp extends StatelessWidget {
               '/performance': (context) => const AircraftPerformanceScreen(),
               '/logbook': (context) => const LogbookScreen(),
               '/pro': (context) => const LoginScreen(),
-              if(Constants.shouldShowBluetoothSpp) '/io': (context) => const IoScreen(),
+              if(Constants.shouldShowBluetoothSpp || Constants.shouldShowBle) '/io': (context) => const IoScreen(),
               '/notes': (context) => const WritingScreen(),
               '/plan_actions': (context) => const PlanActionScreen(),
               '/ai': (context) => const AiScreen(),

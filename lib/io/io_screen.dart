@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:avaremp/constants.dart';
+import 'package:avaremp/io/ble_receiver.dart';
 import 'package:avaremp/utils/toast.dart';
 import 'package:avaremp/storage.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart' as fbp;
 import 'package:flutter_bluetooth_serial_ble/flutter_bluetooth_serial_ble.dart';
 
 
@@ -77,10 +80,86 @@ class IoScreenState extends State<IoScreen> {
   @override
   void initState() {
     super.initState();
-    isDiscovering = widget.start;
+    isDiscovering = widget.start && Constants.shouldShowBluetoothSpp;
     if(isDiscovering) {
       _startDiscovery();
     }
+  }
+
+  // BLE ADS-B receivers section (works on iOS too, unlike SPP). Multiple
+  // receivers can be connected at once - e.g. ADSBee for 1090ES plus a
+  // SoftRF unit for FANET - and are merged into one traffic picture.
+  Widget _bleSection(BuildContext context) {
+    return Expanded(flex: 5, child: Card(child: Column(children: [
+      ListTile(
+        leading: const Icon(Icons.bluetooth),
+        title: const Text("BLE ADS-B Receivers"),
+        subtitle: const Text("Tap a found device to connect; multiple allowed"),
+        trailing: ValueListenableBuilder<bool>(
+            valueListenable: Storage().bleReceiver.scanning,
+            builder: (context, scanning, _) => scanning
+                ? const Padding(padding: EdgeInsets.all(12),
+                    child: SizedBox(width: 20, height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2)))
+                : IconButton(
+                    icon: const Icon(Icons.bluetooth_searching),
+                    tooltip: "Scan",
+                    onPressed: () {
+                      Storage().bleReceiver.scan();
+                    })),
+      ),
+      ValueListenableBuilder<int>(
+          valueListenable: Storage().bleReceiver.change,
+          builder: (context, value, _) => Column(children: [
+            for(BleLink link in Storage().bleReceiver.links)
+              ListTile(
+                dense: true,
+                leading: Icon(Icons.router,
+                    color: link.isConnected ? Colors.green : Colors.grey),
+                title: Text(link.name),
+                subtitle: ValueListenableBuilder<String>(
+                    valueListenable: link.status,
+                    builder: (context, s, _) => Text(s)),
+                trailing: IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    tooltip: "Disconnect & forget",
+                    onPressed: () {
+                      Storage().bleReceiver.disconnect(link);
+                    }),
+              ),
+          ])),
+      ValueListenableBuilder<String>(
+          valueListenable: Storage().bleReceiver.scanError,
+          builder: (context, error, _) => error.isEmpty
+              ? const SizedBox.shrink()
+              : Padding(padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(error, style: const TextStyle(color: Colors.red)))),
+      Expanded(child: StreamBuilder<List<fbp.ScanResult>>(
+          stream: fbp.FlutterBluePlus.scanResults,
+          initialData: const [],
+          builder: (context, snapshot) {
+            List<fbp.ScanResult> found = (snapshot.data ?? [])
+                .where(BleReceiver.isReceiver)
+                .toList();
+            return ListView(children: [
+              for(fbp.ScanResult r in found)
+                if(!Storage().bleReceiver.links.any((l) => l.id == r.device.remoteId.str))
+                  ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.settings_input_antenna),
+                    title: Text(r.device.platformName.isEmpty
+                        ? r.device.remoteId.str
+                        : r.device.platformName),
+                    subtitle: Text("${r.rssi} dBm"),
+                    onTap: () {
+                      Storage().bleReceiver.connect(r.device);
+                      Toast.showToast(context,
+                          "Connecting to ${r.device.platformName}", null, 3);
+                    },
+                  ),
+            ]);
+          })),
+    ])));
   }
 
   @override
@@ -112,7 +191,9 @@ class IoScreenState extends State<IoScreen> {
           )
         ],
       ),
-      body: Column(children: [Expanded(flex: 8, child:ListView.builder(
+      body: Column(children: [
+      if(Constants.shouldShowBle) _bleSection(context),
+      if(Constants.shouldShowBluetoothSpp) Expanded(flex: 8, child:ListView.builder(
         itemCount: results.length,
         itemBuilder: (BuildContext context, index) {
           BluetoothDiscoveryResult result = results[index];
@@ -227,7 +308,7 @@ class IoScreenState extends State<IoScreen> {
           );
         },
       )),
-      Expanded(flex: 1, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [Text(connectedDevice == null? "Not connected" : "Connected to ${connectedDevice!.name ?? connectedDevice!.address}"),
+      if(Constants.shouldShowBluetoothSpp) Expanded(flex: 1, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [Text(connectedDevice == null? "Not connected" : "Connected to ${connectedDevice!.name ?? connectedDevice!.address}"),
       if(connectedDevice != null) TextButton(
         child: const Text("Disconnect"),
         onPressed: () {
