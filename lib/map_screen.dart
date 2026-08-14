@@ -2538,7 +2538,7 @@ class _LayerSelectorOverlayState extends State<_LayerSelectorOverlay> {
   static const Map<String, String> _puckSizes = {
     "S": "20 aircraft, 3000 ft, 10 NM",
     "M": "200 aircraft, 6000 ft, 50 NM",
-    "L": "1000 aircraft, 30000 ft, 500 NM",
+    "L": "1000 aircraft, 60000 ft, 500 NM",
   };
 
   @override
