@@ -497,10 +497,10 @@ class TrafficIdPainter extends AbstractCachedCustomPainter {
   final bool _isAirborne;
 
   TrafficIdPainter(final Traffic t): 
-    _trafficId = t.message.callSign.isNotEmpty ? t.message.callSign : t.message.icao.toRadixString(16).toUpperCase(),
+    _trafficId = t.message.displayId,
     _isAirborne = t.message.airborne,
-    super([ (t.message.callSign.isNotEmpty ? t.message.callSign : t.message.icao.toRadixString(16).toUpperCase()).hashCode, t.message.airborne ? 1 : 0 ], 
-      false, Size((t.message.callSign.isNotEmpty ? t.message.callSign : t.message.icao.toRadixString(16).toUpperCase()).length*_charPixeslWidth+24, 42));
+    super([ (t.message.displayId).hashCode, t.message.airborne ? 1 : 0 ], 
+      false, Size((t.message.displayId).length*_charPixeslWidth+24, 42));
     
   @override
   void freshPaint(ui.Canvas canvas) {
