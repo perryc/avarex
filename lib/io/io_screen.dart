@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:avaremp/constants.dart';
 import 'package:avaremp/utils/toast.dart';
 import 'package:avaremp/storage.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart' as fbp;
 import 'package:flutter_bluetooth_serial_ble/flutter_bluetooth_serial_ble.dart';
 
 
@@ -77,10 +79,65 @@ class IoScreenState extends State<IoScreen> {
   @override
   void initState() {
     super.initState();
-    isDiscovering = widget.start;
+    isDiscovering = widget.start && Constants.shouldShowBluetoothSpp;
     if(isDiscovering) {
       _startDiscovery();
     }
+  }
+
+  // BLE ADS-B receiver section (works on iOS too, unlike SPP)
+  Widget _bleSection(BuildContext context) {
+    return Expanded(flex: 5, child: Card(child: Column(children: [
+      ListTile(
+        leading: const Icon(Icons.bluetooth),
+        title: const Text("BLE ADS-B Receiver"),
+        subtitle: ValueListenableBuilder<String>(
+            valueListenable: Storage().bleReceiver.status,
+            builder: (context, value, _) => Text(value)),
+        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+          ValueListenableBuilder<bool>(
+              valueListenable: Storage().bleReceiver.scanning,
+              builder: (context, scanning, _) => scanning
+                  ? const Padding(padding: EdgeInsets.all(12),
+                      child: SizedBox(width: 20, height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2)))
+                  : IconButton(
+                      icon: const Icon(Icons.bluetooth_searching),
+                      tooltip: "Scan",
+                      onPressed: () {
+                        Storage().bleReceiver.scan();
+                      })),
+          IconButton(
+              icon: const Icon(Icons.bluetooth_disabled),
+              tooltip: "Disconnect & forget",
+              onPressed: () {
+                Storage().bleReceiver.disconnect();
+                Toast.showToast(context, "BLE receiver forgotten", null, 3);
+              }),
+        ]),
+      ),
+      Expanded(child: StreamBuilder<List<fbp.ScanResult>>(
+          stream: fbp.FlutterBluePlus.scanResults,
+          initialData: const [],
+          builder: (context, snapshot) {
+            List<fbp.ScanResult> found = snapshot.data ?? [];
+            return ListView(children: [
+              for(fbp.ScanResult r in found)
+                ListTile(
+                  leading: const Icon(Icons.settings_input_antenna),
+                  title: Text(r.device.platformName.isEmpty
+                      ? r.device.remoteId.str
+                      : r.device.platformName),
+                  subtitle: Text("${r.rssi} dBm"),
+                  onTap: () {
+                    Storage().bleReceiver.connect(r.device);
+                    Toast.showToast(context,
+                        "Connecting to ${r.device.platformName}", null, 3);
+                  },
+                ),
+            ]);
+          })),
+    ])));
   }
 
   @override
@@ -112,7 +169,9 @@ class IoScreenState extends State<IoScreen> {
           )
         ],
       ),
-      body: Column(children: [Expanded(flex: 8, child:ListView.builder(
+      body: Column(children: [
+      if(Constants.shouldShowBle) _bleSection(context),
+      if(Constants.shouldShowBluetoothSpp) Expanded(flex: 8, child:ListView.builder(
         itemCount: results.length,
         itemBuilder: (BuildContext context, index) {
           BluetoothDiscoveryResult result = results[index];
@@ -227,7 +286,7 @@ class IoScreenState extends State<IoScreen> {
           );
         },
       )),
-      Expanded(flex: 1, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [Text(connectedDevice == null? "Not connected" : "Connected to ${connectedDevice!.name ?? connectedDevice!.address}"),
+      if(Constants.shouldShowBluetoothSpp) Expanded(flex: 1, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [Text(connectedDevice == null? "Not connected" : "Connected to ${connectedDevice!.name ?? connectedDevice!.address}"),
       if(connectedDevice != null) TextButton(
         child: const Text("Disconnect"),
         onPressed: () {
