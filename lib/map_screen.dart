@@ -1530,7 +1530,7 @@ class MapScreenState extends State<MapScreen> {
                                 tooltip: "Traffic Volume:\n"
                                     "S: 20 Aircraft, 3000ft, 10NM\n"
                                     "M: 200 Aircraft, 6000ft, 50NM\n"
-                                    "L: 1000 Aircraft, 30000ft, 500NM",
+                                    "L: 1000 Aircraft, 60000ft, 500NM",
                                 onPressed: () {
                                   setState(() {
                                     Storage().settings.setTrafficPuckSize(TrafficCache.adjustPuck(Storage().settings.getTrafficPuckSize()));

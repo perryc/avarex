@@ -133,7 +133,9 @@ class TrafficCache {
   void changeArea(String size) {
     // puck size S, M, L
     maxEntries =                        size == "S" ? 20    : (size == "M" ? 200   : 1000);
-    _kTrafficAltDiffThresholdFt =       size == "S" ? 3000  : (size == "M" ? 6000  : 30000);
+    // L altitude window is 60000 so a ground-level observer still sees the
+    // FL340-FL400 cruise band (30000 cut them off)
+    _kTrafficAltDiffThresholdFt =       size == "S" ? 3000  : (size == "M" ? 6000  : 60000);
     _kTrafficDistanceDiffThresholdNm =  size == "S" ? 10    : (size == "M" ? 50    : 500);
     List<Traffic?> t = List.filled(maxEntries + 1, null);
     if(t.length < _traffic.length) {
