@@ -9,6 +9,7 @@ import 'package:avaremp/map_screen.dart';
 import 'package:avaremp/place/saa.dart';
 import 'package:avaremp/place/airspace_3d_view.dart';
 import 'package:avaremp/plan/hold_tab.dart';
+import 'package:avaremp/utils/openair_parser.dart';
 import 'package:avaremp/storage.dart';
 import 'package:avaremp/destination/nav.dart';
 import 'package:avaremp/utils/toast.dart';
@@ -42,6 +43,7 @@ class LongPressFuture {
   final Destination _destination;
   Destination show;
   List<Saa> saa = [];
+  List<OpenAirAirspace> caAirspace = [];
   List<NavDestination>? navs;
 
   LongPressFuture(this._destination) : show =
@@ -56,6 +58,7 @@ class LongPressFuture {
     show = await DestinationFactory.make(_destination);
     navs = await MainDatabaseHelper.db.findNearestVOR(_destination.coordinate);
     saa = await MainDatabaseHelper.db.getSaa(_destination.coordinate);
+    caAirspace = Storage().canadaAirspace.at(_destination.coordinate);
   }
 
   Future<LongPressFuture> getAll() async {
@@ -352,7 +355,7 @@ class LongPressScreenState extends State<LongPressScreen> {
     );
     pages[labels.indexOf("ST")] = Sounding.getSoundingImage(showDestination.coordinate, context);
 
-    if (future.saa.isNotEmpty) {
+    if (future.saa.isNotEmpty || future.caAirspace.isNotEmpty) {
       pages[labels.indexOf("SUA")] = ListView(
         padding: const EdgeInsets.all(8),
         children: [
@@ -361,6 +364,14 @@ class LongPressScreenState extends State<LongPressScreen> {
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: s.toWidget(),
+              ),
+            ),
+          for (OpenAirAirspace a in future.caAirspace)
+            Card(
+              child: ListTile(
+                title: Text("${a.cls} ${a.name}"),
+                subtitle: Text("${a.floor} - ${a.ceiling}"
+                    "${a.frequency.isEmpty ? '' : '  ${a.frequency}'}"),
               ),
             ),
         ],
