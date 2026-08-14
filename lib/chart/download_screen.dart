@@ -1,4 +1,5 @@
 
+import 'package:avaremp/canada/canada_download.dart';
 import 'package:avaremp/utils/faa_dates.dart';
 import 'package:avaremp/storage.dart';
 import 'package:avaremp/utils/toast.dart';
@@ -681,6 +682,14 @@ class DownloadScreenState extends State<DownloadScreen> {
         Chart('FAA Handbooks Specialty',  _absentColor, _absentIcon, 'FAA_HANDBOOKS_SPECIALTY', _stateAbsentNone, "", ValueNotifier<int>(0), true, Download(), true),
         Chart('FAA ACS',                  _absentColor, _absentIcon, 'FAA_ACS',                 _stateAbsentNone, "", ValueNotifier<int>(0), true, Download(), true),
         Chart('FAA Advisory Circulars',   _absentColor, _absentIcon, 'FAA_AC',                  _stateAbsentNone, "", ValueNotifier<int>(0), true, Download(), true),
+      ],
+      false,
+    ),
+    ChartCategory(
+      ChartCategory.canada,
+      _absentColor,
+      [
+        Chart('Canada (OurAirports + Airspace)', _absentColor, _absentIcon, CanadaDownload.filename, _stateAbsentNone, "", ValueNotifier<int>(0), true, CanadaDownload(), true),
       ],
       false,
     ),
