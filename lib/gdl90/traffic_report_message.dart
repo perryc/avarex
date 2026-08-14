@@ -21,6 +21,23 @@ class TrafficReportMessage extends Message {
   double verticalSpeed = 0;
   double heading = 0;
   String callSign = "";
+
+  /// Best display identity: broadcast callsign, else a registration derived
+  /// from the ICAO address where the national allocation is algorithmic
+  /// (Canada C00001..C0889A maps linearly to C-FAAA..C-GZZZ), else hex ICAO.
+  String get displayId {
+    if(callSign.isNotEmpty) {
+      return callSign;
+    }
+    if(icao >= 0xC00001 && icao <= 0xC00001 + 2 * 26 * 26 * 26 - 1) {
+      int offset = icao - 0xC00001;
+      String first = offset < 26 * 26 * 26 ? "F" : "G";
+      offset %= 26 * 26 * 26;
+      String l(int v) => String.fromCharCode(65 + v);
+      return "C-$first${l(offset ~/ 676)}${l((offset ~/ 26) % 26)}${l(offset % 26)}";
+    }
+    return icao.toRadixString(16).toUpperCase();
+  }
   bool airborne = false;
   bool extrapolated = false;
   int emitter = 0;
