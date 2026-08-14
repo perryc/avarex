@@ -154,6 +154,14 @@ class AppSettings {
     provider.setString("key-layers-opacity-v54", opacity.map((double e) => e.toString()).toList().join(","));
   }
 
+  void setBleDeviceId(String id) {
+    provider.setString("key-ble-device-id", id);
+  }
+
+  String getBleDeviceId() {
+    return provider.getValue("key-ble-device-id", defaultValue: "") as String;
+  }
+
   void setCurrentPlateAirport(String name) {
     provider.setString("key-current-plate-airport", name);
   }

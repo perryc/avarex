@@ -343,7 +343,7 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver { //
                           Navigator.pushNamed(context, '/logbook');
                         },
                       ),
-                      if (Constants.shouldShowBluetoothSpp) ...[
+                      if (Constants.shouldShowBluetoothSpp || Constants.shouldShowBle) ...[
                         const SizedBox(height: 8),
                         _buildSectionHeader(context, "Connectivity"),
                         _buildMenuItem(

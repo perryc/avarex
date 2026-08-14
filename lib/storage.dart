@@ -55,6 +55,7 @@ import 'instruments/flight_timer.dart';
 import 'gdl90/message.dart';
 import 'package:avaremp/canada/canada_airspace.dart';
 import 'package:avaremp/canada/canada_import.dart';
+import 'package:avaremp/io/ble_receiver.dart';
 import 'utils/geojson_parser.dart';
 import 'io/gps.dart';
 import 'nmea/nmea_buffer.dart';
@@ -118,6 +119,7 @@ class Storage {
   final DownloadManager downloadManager = DownloadManager();
   final GeoJsonParser geoParser = GeoJsonParser();
   final CanadaAirspace canadaAirspace = CanadaAirspace();
+  final BleReceiver bleReceiver = BleReceiver();
   List<bool> activeChecklistSteps = [];
   String activeChecklistName = "";
   static const gpsSwitchoverTimeMs = 30000; // switch GPS in 30 seconds
@@ -382,6 +384,10 @@ class Storage {
 
     // GPS data receive
     _udpReceiver.start([4000, 43211, 49002], [false, false, false]);
+
+    // BLE ADS-B receiver reconnect (no-op if none remembered); the link is
+    // left up across app pause since the OS manages it
+    bleReceiver.startAutoConnect();
 
     // Broadcast the Avidyne "AVISDK" trigger so any Avidyne IFD on the network
     // starts streaming its Capstone (GDL90) ADS-B data. That data arrives on
