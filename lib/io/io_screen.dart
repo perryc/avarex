@@ -128,6 +128,17 @@ class IoScreenState extends State<IoScreen> {
                     }),
               ),
           ])),
+      ValueListenableBuilder<bool>(
+          valueListenable: Storage().receptionLogger.enabled,
+          builder: (context, logging, _) => SwitchListTile(
+            dense: true,
+            title: const Text("Log reception (coverage flights)"),
+            subtitle: const Text("1 Hz samples + per-target rows to reception_logs/"),
+            value: logging,
+            onChanged: (on) {
+              on ? Storage().receptionLogger.start() : Storage().receptionLogger.stop();
+            },
+          )),
       ValueListenableBuilder<String>(
           valueListenable: Storage().bleReceiver.scanError,
           builder: (context, error, _) => error.isEmpty

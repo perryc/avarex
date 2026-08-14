@@ -56,6 +56,7 @@ import 'gdl90/message.dart';
 import 'package:avaremp/canada/canada_airspace.dart';
 import 'package:avaremp/canada/canada_import.dart';
 import 'package:avaremp/io/ble_receiver.dart';
+import 'package:avaremp/io/reception_logger.dart';
 import 'utils/geojson_parser.dart';
 import 'io/gps.dart';
 import 'nmea/nmea_buffer.dart';
@@ -120,6 +121,7 @@ class Storage {
   final GeoJsonParser geoParser = GeoJsonParser();
   final CanadaAirspace canadaAirspace = CanadaAirspace();
   final BleReceiver bleReceiver = BleReceiver();
+  final ReceptionLogger receptionLogger = ReceptionLogger();
   List<bool> activeChecklistSteps = [];
   String activeChecklistName = "";
   static const gpsSwitchoverTimeMs = 30000; // switch GPS in 30 seconds

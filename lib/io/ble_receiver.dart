@@ -159,11 +159,16 @@ class BleLink {
   BluetoothCharacteristic? _control;
   final List<StreamSubscription<List<int>>> _dataSubs = [];
   StreamSubscription<BluetoothConnectionState>? _connectionSub;
-  final StreamFramer _framer = StreamFramer(
-      (frame) => Storage().gdl90Buffer.put(frame),
+  late final StreamFramer _framer = StreamFramer(
+      (frame) {
+        Storage().receptionLogger.onFrame(name, frame);
+        Storage().gdl90Buffer.put(frame);
+      },
       (sentence) => Storage().nmeaBuffer.put(sentence));
-  final UplinkReassembler _uplinkReassembler =
-      UplinkReassembler((frame) => Storage().gdl90Buffer.put(frame));
+  late final UplinkReassembler _uplinkReassembler = UplinkReassembler((frame) {
+    Storage().receptionLogger.onFrame(name, frame);
+    Storage().gdl90Buffer.put(frame);
+  });
   bool _running = false;
 
   String get id => _device.remoteId.str;
@@ -227,6 +232,7 @@ class BleLink {
               c.uuid == BleReceiver.adsbOwnship ||
               c.uuid == BleReceiver.adsbStatus) {
             _dataSubs.add(c.onValueReceived.listen((data) {
+              Storage().receptionLogger.onFrame(name, data);
               Storage().gdl90Buffer.put(Uint8List.fromList(data));
             }));
             await c.setNotifyValue(true);
