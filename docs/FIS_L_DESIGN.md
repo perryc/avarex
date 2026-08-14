@@ -60,6 +60,35 @@ not the EFB. Same weather, different last mile.
   reassemble products, emit as GDL90 uplink over BLE.
 - Nothing in AvareX, by design.
 
+## Ground station implementation plan (farmtrx rtk base, planned)
+
+The deployed PoE RTK base stations (ESP32-S3 + SX126x @ 915 MHz, internet
+via Ethernet/WiFi, ESP-IDF 5.5 C++ firmware) already provide every layer
+FIS-L needs. Plan (no code written yet; owner's production firmware):
+
+1. New module `app/function/weather_broadcast/` following the existing
+   module pattern: task gated on network events (like `self_ota`), fetches
+   `aviationweather.gov/api/data/metar?ids=<stations>&format=raw&taf=true`
+   every ~5 min via the existing `http::client`, emits FIS-L product
+   frames (`['F','L'][ver][product_id][payload]`, product 1 = METAR/TAF
+   text) as a new event-loop event.
+2. LoRa service gains one event handler (mirroring its `data_rtcm`
+   handler) queueing weather frames into the existing 8 KB send ring
+   buffer. The firmware's 10-byte packet header (MAC, message number,
+   first/last flags, packet number) already provides fragmentation and
+   reassembly - the airborne receiver parses it exactly like the RTK
+   rovers do.
+3. Config via the firmware's LittleFS JSON + schema pattern (enabled,
+   station list, fetch interval), surfaced in its web UI.
+4. Channel: weather shares the RTK correction channel (same freq/SF/BW/CR)
+   - receivers get it for free, rovers discard by magic bytes; airtime for
+   text products is negligible. Radar later needs an airtime budget or a
+   scheduled hop.
+
+Airborne side unchanged from the sketch above: SoftRF firmware matches the
+base's LoRa parameters, filters `FL` frames, reassembles, wraps as GDL90
+uplink over the BLE Uplink characteristic.
+
 ## Posture
 
 Unofficial advisory data, not for navigation, no certification claims -
