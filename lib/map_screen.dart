@@ -153,6 +153,13 @@ class MapScreenState extends State<MapScreen> {
     });
   }
 
+  void _canadaAirspaceListen() {
+    setState(() {
+      _canadaAirspaceLayer = null;
+      _canadaAirportsCluster = null;
+    });
+  }
+
   @override
   void initState() {
     // move with airplane but do not hold the map
@@ -163,6 +170,7 @@ class MapScreenState extends State<MapScreen> {
     Storage().airSigmet.change.addListener(_airSigmetListen);
     Storage().tfr.change.addListener(_tfrListen);
     Storage().geoParser.change.addListener(_geoJsonListen);
+    Storage().canadaAirspace.change.addListener(_canadaAirspaceListen);
     // load vector tiles
     _mbtilesManager.loadMBTiles(PathUtils.getFilePath(Storage().dataDir, PathUtils.getFilePath("maps", "nasr.mbtiles")));
 
@@ -179,6 +187,7 @@ class MapScreenState extends State<MapScreen> {
     Storage().airSigmet.change.removeListener(_airSigmetListen);
     Storage().tfr.change.removeListener(_tfrListen);
     Storage().geoParser.change.removeListener(_geoJsonListen);
+    Storage().canadaAirspace.change.removeListener(_canadaAirspaceListen);
     _previousPosition = null;
     _mbtilesManager.close();
     super.dispose();
@@ -302,6 +311,31 @@ class MapScreenState extends State<MapScreen> {
   PolygonLayer _makeGeoJsonLayer() {
     _geoJsonLayer ??= PolygonLayer(polygons: Storage().geoParser.polygons);
     return _geoJsonLayer!;
+  }
+
+  PolygonLayer? _canadaAirspaceLayer;
+  PolygonLayer _makeCanadaAirspaceLayer() {
+    _canadaAirspaceLayer ??= PolygonLayer(polygons: Storage().canadaAirspace.polygons);
+    return _canadaAirspaceLayer!;
+  }
+
+  MarkerClusterLayerWidget? _canadaAirportsCluster;
+  MarkerClusterLayerWidget _makeCanadaAirportsCluster() {
+    _canadaAirportsCluster ??= makeCluster([
+      for(Destination d in Storage().canadaAirspace.airports)
+        Marker(point: d.coordinate,
+            width: 22,
+            height: 22,
+            child: GestureDetector(
+              onTap: () {
+                showDestination(context, [d]);
+              },
+              child: const Icon(Icons.local_airport,
+                  size: 22, color: Color(0xFFA0409A)), // chart magenta
+            )
+        )
+    ]);
+    return _canadaAirportsCluster!;
   }
 
   MarkerClusterLayerWidget makeCluster(List<Marker> markers) {
@@ -561,6 +595,21 @@ class MapScreenState extends State<MapScreen> {
       if (mbtilesWidget != null) {
         layers.add(mbtilesWidget);
       }
+    }
+
+    // Canadian airspace polygons (OpenAir file from the Canada download)
+    lIndex = _layers.indexOf('CA Airspace');
+    opacity = _layersOpacity[lIndex];
+    if (opacity > 0) {
+      layers.add(IgnorePointer(child: Opacity(opacity: opacity, child: _makeCanadaAirspaceLayer())));
+    }
+
+    // Canadian airports imported from OurAirports; the US map shows airports
+    // on the chart raster itself, which does not exist for Canada
+    lIndex = _layers.indexOf('CA Airports');
+    opacity = _layersOpacity[lIndex];
+    if (opacity > 0) {
+      layers.add(Opacity(opacity: opacity, child: _makeCanadaAirportsCluster()));
     }
 
     lIndex = _layers.indexOf('CAP Grid');
@@ -1788,6 +1837,8 @@ class MapScreenState extends State<MapScreen> {
       case "Weather": return Icons.cloud;
       case "TFR": return MdiIcons.clockAlert;
       case "Game TFR": return MdiIcons.stadium;
+      case "CA Airspace": return MdiIcons.leaf;
+      case "CA Airports": return Icons.local_airport;
       case "Traffic": return MdiIcons.airplaneTakeoff;
       case "Nav": return MdiIcons.navigation;
       case "Plate": return MdiIcons.fileDocument;

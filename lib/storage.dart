@@ -53,6 +53,8 @@ import 'package:avaremp/destination/destination.dart';
 import 'chart/download_manager.dart';
 import 'instruments/flight_timer.dart';
 import 'gdl90/message.dart';
+import 'package:avaremp/canada/canada_airspace.dart';
+import 'package:avaremp/canada/canada_import.dart';
 import 'utils/geojson_parser.dart';
 import 'io/gps.dart';
 import 'nmea/nmea_buffer.dart';
@@ -115,6 +117,7 @@ class Storage {
   late UnitConversion units;
   final DownloadManager downloadManager = DownloadManager();
   final GeoJsonParser geoParser = GeoJsonParser();
+  final CanadaAirspace canadaAirspace = CanadaAirspace();
   List<bool> activeChecklistSteps = [];
   String activeChecklistName = "";
   static const gpsSwitchoverTimeMs = 30000; // switch GPS in 30 seconds
@@ -487,6 +490,16 @@ class Storage {
 
     await checkChartsExist();
     await checkDataExpiry();
+
+    if(!kIsWeb) {
+      // restore Canadian data after a DatabasesX update or failed import,
+      // and show the airspace/airport layers; none of this needs the network
+      // or awaiting
+      CanadaImport.reimportIfInstalled()
+          .then((_) => canadaAirspace.loadAirports());
+      canadaAirspace.loadFromFile(
+          CanadaImport.dataPath(CanadaImport.airspaceFile));
+    }
 
     winds = WeatherCache.make(WindsCache) as WindsCache;
     metar = WeatherCache.make(MetarCache) as MetarCache;
