@@ -8,6 +8,8 @@ By Apps4Av.
 
 ## Canadian Data (work in progress — this fork)
 
+**📦 Try it: [download the latest APK](https://github.com/perryc/avarex/releases/latest)** (Android sideload; see release notes).
+
 This fork (`canadian-data` branch) adds Canadian airport and airspace
 support to AvareX:
 
