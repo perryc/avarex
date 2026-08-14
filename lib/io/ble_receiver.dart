@@ -29,6 +29,7 @@ class BleReceiver {
   static final Guid adsbTraffic = Guid("0BEE0010-1090-46F0-A9AC-52D6BE4C29CC"); // notify
   static final Guid adsbOwnship = Guid("0BEE0011-1090-46F0-A9AC-52D6BE4C29CC"); // notify
   static final Guid adsbStatus = Guid("0BEE0012-1090-46F0-A9AC-52D6BE4C29CC"); // notify
+  static final Guid adsbUplink = Guid("0BEE0013-1090-46F0-A9AC-52D6BE4C29CC"); // notify, fragmented (FIS-B)
   static final Guid adsbControl = Guid("0BEE0020-1090-46F0-A9AC-52D6BE4C29CC"); // write
 
   // Nordic UART Service fallback (SoftRF, BLE-serial bridges)
@@ -141,6 +142,8 @@ class BleLink {
   final StreamFramer _framer = StreamFramer(
       (frame) => Storage().gdl90Buffer.put(frame),
       (sentence) => Storage().nmeaBuffer.put(sentence));
+  final UplinkReassembler _uplinkReassembler =
+      UplinkReassembler((frame) => Storage().gdl90Buffer.put(frame));
   bool _running = false;
 
   String get id => _device.remoteId.str;
@@ -181,7 +184,9 @@ class BleLink {
   Future<void> _subscribe() async {
     if(Platform.isAndroid) {
       try {
-        await _device.requestMtu(247);
+        // 517 is the Android maximum; large MTU keeps FIS-B uplink fragments
+        // to a minimum (iOS negotiates its own maximum automatically)
+        await _device.requestMtu(517);
       }
       catch(_) {} // some stacks refuse; default MTU still works
     }
@@ -206,6 +211,12 @@ class BleLink {
             }));
             await c.setNotifyValue(true);
             subscribed = true;
+          }
+          else if(c.uuid == BleReceiver.adsbUplink) {
+            // FIS-B uplink frames exceed one notification; fragments carry a
+            // 1-byte first/last/sequence header and reassemble per link
+            _dataSubs.add(c.onValueReceived.listen(_uplinkReassembler.feed));
+            await c.setNotifyValue(true);
           }
           else if(c.uuid == BleReceiver.adsbControl) {
             _control = c;
@@ -263,6 +274,45 @@ class BleLink {
     }
     catch(_) {}
     status.value = "Not connected";
+  }
+}
+
+// Reassembles fragmented Uplink characteristic notifications (FIS-B) into
+// complete framed GDL90 messages. Header byte: bit7 first, bit6 last,
+// bits 0-5 sequence (mod 64); a sequence gap discards the partial message.
+class UplinkReassembler {
+
+  UplinkReassembler(this.onFrame);
+
+  final void Function(Uint8List) onFrame;
+  final List<int> _buffer = [];
+  int _expectedSeq = -1; // -1: waiting for a first fragment
+
+  void feed(List<int> data) {
+    if(data.length < 2) {
+      return;
+    }
+    int header = data[0];
+    bool first = (header & 0x80) != 0;
+    bool last = (header & 0x40) != 0;
+    int seq = header & 0x3F;
+
+    if(first) {
+      _buffer.clear();
+      _expectedSeq = seq;
+    }
+    if(_expectedSeq != seq) {
+      _buffer.clear();
+      _expectedSeq = -1; // lost a fragment; wait for the next first
+      return;
+    }
+    _buffer.addAll(data.sublist(1));
+    _expectedSeq = (seq + 1) & 0x3F;
+    if(last) {
+      onFrame(Uint8List.fromList(_buffer));
+      _buffer.clear();
+      _expectedSeq = -1;
+    }
   }
 }
 
