@@ -31,6 +31,7 @@ by service. Advertised name suggestion: `ADSBee-XXXX` (serial suffix).
 | `0BEE0010` | Traffic | notify | One framed GDL90 Traffic Report (ID 0x14) per notification |
 | `0BEE0011` | Ownship | notify | One framed GDL90 Ownship Report (0x0A) or Ownship Geometric Altitude (0x0B) per notification |
 | `0BEE0012` | Status | notify | One framed GDL90 Heartbeat (0x00) per notification, 1 Hz; MAY also carry vendor status messages (see below) |
+| `0BEE0013` | Uplink | notify | Fragments of framed GDL90 Uplink Data (0x07) - FIS-B weather; see Fragmentation below |
 | `0BEE0020` | Control | write, write-no-response | Vendor TLV commands (config, filters); replies come as vendor messages on Status |
 
 Also implement the standard **Device Information Service** (0x180A) with
@@ -39,19 +40,41 @@ the hardware is battery-powered.
 
 ### Payload rules
 
-- Every notification is exactly one complete GDL90 message: `0x7E, ID,
-  payload, CRC-16, 0x7E` with standard byte stuffing. Atomic per
-  notification — a client never needs to reassemble across notifications.
-- Messages are well under the 244-byte usable payload at MTU 247 (a
-  traffic report is 30 bytes framed). The peripheral SHOULD request/accept
-  MTU >= 247 but MUST function at the default 23-byte MTU by using GDL90
-  messages that fit, or by requiring MTU exchange before notifying.
+- On Traffic/Ownship/Status, every notification is exactly one complete
+  GDL90 message: `0x7E, ID, payload, CRC-16, 0x7E` with standard byte
+  stuffing. Atomic per notification — a client never needs to reassemble
+  across notifications on these characteristics.
+- Traffic/ownship/status messages are well under the 244-byte usable
+  payload at MTU 247 (a traffic report is 30 bytes framed). Both sides
+  SHOULD negotiate MTU 517 (Android maximum; iOS negotiates similar
+  automatically) so uplink fragments are few.
 - Traffic rate: one notification per received target update, coalesced to
   at most ~5 Hz per target. Ownship 1 Hz (if the receiver has GNSS),
   Status 1 Hz.
 - Vendor status/config replies use GDL90 ID 0x65 (long-established vendor
   ID convention) with a TLV body; clients that don't understand 0x65 will
   discard it harmlessly.
+
+### Fragmentation (Uplink characteristic only)
+
+FIS-B uplink frames (~450 bytes framed, worst-case larger after byte
+stuffing) exceed a single notification, so the Uplink characteristic
+carries fragments with a 1-byte header:
+
+    bit 7: first fragment of a message
+    bit 6: last fragment of a message
+    bits 0-5: sequence number, incremented per fragment, wraps mod 64
+
+The remaining bytes are a slice of the framed GDL90 Uplink message. The
+client resets its reassembly buffer on a `first` fragment, appends in
+sequence order, and delivers the completed frame on `last`; any sequence
+gap discards the partial message (the next uplink re-syncs). A message
+that fits entirely in one notification has both `first` and `last` set.
+The peripheral SHOULD size fragments to the connection's negotiated MTU
+(payload = MTU - 3 - 1) and MUST NOT send uplink fragments on connections
+with MTU < 100 (the default-MTU case where FIS-B would drown the link).
+Uplink applies only where a 978 MHz uplink network exists (US FAA;
+Canadian CIFIB stations, cifib.ca).
 
 ### FANET / multi-band targets
 

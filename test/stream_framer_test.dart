@@ -42,6 +42,32 @@ void main() {
     expect(frames.length, 1);
   });
 
+  test('uplink reassembler joins fragments and drops on gaps', () {
+    List<Uint8List> frames = [];
+    UplinkReassembler r = UplinkReassembler((f) => frames.add(f));
+    // single-fragment message: first+last, seq 0
+    r.feed([0x80 | 0x40 | 0, 1, 2, 3]);
+    expect(frames.length, 1);
+    expect(frames[0], [1, 2, 3]);
+    // two-fragment message: seq 5 then 6
+    r.feed([0x80 | 5, 10, 11]);
+    r.feed([0x40 | 6, 12, 13]);
+    expect(frames.length, 2);
+    expect(frames[1], [10, 11, 12, 13]);
+    // gap: first seq 1, then seq 3 (2 lost) -> dropped, next message fine
+    r.feed([0x80 | 1, 9]);
+    r.feed([0x40 | 3, 9]);
+    expect(frames.length, 2);
+    r.feed([0x80 | 0x40 | 9, 7]);
+    expect(frames.length, 3);
+    expect(frames[2], [7]);
+    // sequence wraps mod 64
+    r.feed([0x80 | 63, 1]);
+    r.feed([0x40 | 0, 2]);
+    expect(frames.length, 4);
+    expect(frames[3], [1, 2]);
+  });
+
   test('drops noise and resyncs', () {
     List<Uint8List> frames = [];
     StreamFramer f = StreamFramer((g) => frames.add(g), (n) {});

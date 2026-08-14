@@ -23,7 +23,11 @@ SERVICE = "0BEE0001-1090-46F0-A9AC-52D6BE4C29CC"
 TRAFFIC = "0BEE0010-1090-46F0-A9AC-52D6BE4C29CC"
 OWNSHIP = "0BEE0011-1090-46F0-A9AC-52D6BE4C29CC"
 STATUS = "0BEE0012-1090-46F0-A9AC-52D6BE4C29CC"
+UPLINK = "0BEE0013-1090-46F0-A9AC-52D6BE4C29CC"
 CONTROL = "0BEE0020-1090-46F0-A9AC-52D6BE4C29CC"
+
+UPLINK_FRAGMENT_BYTES = 180  # conservative; header bit7 first, bit6 last, bits 0-5 seq
+uplink_seq = 0
 
 FLAG = 0x7E
 
@@ -41,13 +45,31 @@ def split_gdl90(data: bytes):
 
 def char_for_message(msg: bytes) -> str | None:
     msg_id = msg[1] if len(msg) > 1 else 0
-    if msg_id == 0x07 or len(msg) > 240:
-        return None  # FIS-B uplink: US-only, exceeds MTU, not in the BLE spec
+    if msg_id == 0x07:
+        return UPLINK  # FIS-B: fragmented (see uplink_fragments)
+    if len(msg) > 240:
+        return None
     if msg_id == 0x14:
         return TRAFFIC
     if msg_id in (0x0A, 0x0B):
         return OWNSHIP
     return STATUS
+
+
+def uplink_fragments(msg: bytes):
+    """Split a framed uplink message into header-prefixed fragments."""
+    global uplink_seq
+    out = []
+    for offset in range(0, len(msg), UPLINK_FRAGMENT_BYTES):
+        chunk = msg[offset:offset + UPLINK_FRAGMENT_BYTES]
+        header = uplink_seq & 0x3F
+        if offset == 0:
+            header |= 0x80  # first
+        if offset + len(chunk) >= len(msg):
+            header |= 0x40  # last
+        uplink_seq = (uplink_seq + 1) & 0x3F
+        out.append(bytes([header]) + chunk)
+    return out
 
 
 async def main(path: str):
@@ -58,7 +80,7 @@ async def main(path: str):
     server = BlessServer(name="ADSBee-SIM")
     await server.add_new_service(SERVICE)
     notify = GATTCharacteristicProperties.notify | GATTCharacteristicProperties.read
-    for uuid in (TRAFFIC, OWNSHIP, STATUS):
+    for uuid in (TRAFFIC, OWNSHIP, STATUS, UPLINK):
         await server.add_new_characteristic(
             SERVICE, uuid, notify, b"", GATTAttributePermissions.readable)
     await server.add_new_characteristic(
@@ -75,9 +97,11 @@ async def main(path: str):
             uuid = char_for_message(msg)
             if uuid is None:
                 continue
-            c: BlessGATTCharacteristic = server.get_characteristic(uuid)
-            c.value = msg
-            server.update_value(SERVICE, uuid)
+            payloads = uplink_fragments(msg) if uuid == UPLINK else [msg]
+            for payload in payloads:
+                c: BlessGATTCharacteristic = server.get_characteristic(uuid)
+                c.value = payload
+                server.update_value(SERVICE, uuid)
             await asyncio.sleep(0.05)
         print("capture replayed; looping")
 
