@@ -1,0 +1,142 @@
+141 Canadian airports missing data:
+  CDS2     Disley Airport                             missing: runways, frequencies
+  CA-0428  Elbow Airstrip                             missing: frequencies
+  CAG2     Regina / Aerogate Airport                  missing: runways, frequencies
+  CRE4     Cree Lake (Crystal Lodge) Water Aerodrom   missing: runways, frequencies
+  CSF8     Lampman/Spitfire Air Airport               missing: runways, frequencies
+  CAM2     Misaw Lake Airport                         missing: runways, frequencies
+  CMC4     Clayton Air 1 Airport                      missing: frequencies
+  CA-0940  Asquith Aerodrome                          missing: runways, frequencies
+  CA-1290  Lloyd Lake                                 missing: runways, frequencies
+  CAN5     Allan Airport                              missing: frequencies
+  CAX2     Axe Lake Aerodrome                         missing: runways, frequencies
+  CBR3     Brigden Field                              missing: frequencies
+  CBS2     Blue Sky Airport                           missing: frequencies
+  CBS7     Briercrest South Airport                   missing: frequencies
+  CCA5     Stenen/Clayton Air 3 Airport               missing: frequencies
+  CCB2     Seabee Mine Airport                        missing: runways, frequencies
+  CCF7     Alida/Cowan Farm Private Aerodrome         missing: runways, frequencies
+  CCL2     Candle Lake Airpark                        missing: runways, frequencies
+  CCL9     Outlook (South) Airport                    missing: frequencies
+  CEW2     Combine World Field                        missing: runways, frequencies
+  CHM2     Spiritwood / H & M Fast Farms              missing: runways, frequencies
+  CJA7     Arcola Airport                             missing: runways, frequencies
+  CJB5     Moosomin Airport                           missing: frequencies
+  CJB7     Buffalo Narrows Seaplane Base              missing: runways, frequencies
+  CJC2     Craik Airport                              missing: frequencies
+  CJC3     Davidson Municipal Airport                 missing: frequencies
+  CJC4     Central Butte Airport                      missing: frequencies
+  CJC6     Hafford Airport                            missing: frequencies
+  CJD2     Cudworth Municipal Airport                 missing: runways, frequencies
+  CJD3     Birch Hills Airport                        missing: frequencies
+  CJE2     Dore Lake Airport                          missing: frequencies
+  CJE5     Glaslyn Airport                            missing: frequencies
+  CJF8     Biggar Airport                             missing: frequencies
+  CJG2     Eatonia (Elvie Smith) Municipal Airport    missing: frequencies
+  CJH3     Maidstone Airport                          missing: frequencies
+  CJH4     Ferland Airport                            missing: frequencies
+  CJH8     Leask Airport                              missing: frequencies
+  CJJ5     Cabri Airport                              missing: frequencies
+  CJK3     Beauval Airport                            missing: frequencies
+  CJK5     Gull Lake Airport                          missing: frequencies
+  CJK9     Preeceville Airport                        missing: frequencies
+  CJL2     Hatchet Lake Airport                       missing: frequencies
+  CJL4     La Loche Airport                           missing: frequencies
+  CJL9     Radisson Airport                           missing: frequencies
+  CJM2     Ituna Airport                              missing: frequencies
+  CJM4     Gravelbourg Airport                        missing: frequencies
+  CJM6     Arborfield Airport                         missing: frequencies
+  CJN2     Kamsack Airport                            missing: frequencies
+  CJN4     Assiniboia Airport                         missing: frequencies
+  CJN5     Corman Air Park                            missing: runways, frequencies
+  CJP2     Kerrobert Airport                          missing: frequencies
+  CJP6     Camsell Portage Airport                    missing: frequencies
+  CJP9     Charlot River Airport                      missing: frequencies
+  CJQ2     Lampman Airport                            missing: frequencies
+  CJQ8     Maryfield Aerodrome                        missing: frequencies
+  CJR7     Canora Airport                             missing: frequencies
+  CJR9     Naicam Airport                             missing: frequencies
+  CJS2     Malcolm Island Airport                     missing: frequencies
+  CJS3     Cluff Lake Airport                         missing: frequencies
+  CJS4     Moose Jaw Municipal Airport                missing: frequencies
+  CJT4     Cumberland House Airport                   missing: frequencies
+  CJT9     Leoville Airport                           missing: frequencies
+  CJU4     Humboldt Airport                           missing: frequencies
+  CJU7     Edam Airport                               missing: frequencies
+  CJV2     Neilburg Airport                           missing: frequencies
+  CJV9     Melville Municipal Airport                 missing: frequencies
+  CJW2     Oxbow Airport                              missing: frequencies
+  CJW3     Loon Lake Airport                          missing: frequencies
+  CJW4     Pelican Narrows Airport                    missing: frequencies
+  CJW7     Cigar Lake Airport                         missing: frequencies
+  CJX4     Rosetown Airport                           missing: frequencies
+  CJX8     Hatchet Lake Seaplane Base                 missing: runways, frequencies
+  CJY4     Sandy Bay Airport                          missing: frequencies
+  CJZ4     Shellbrook Airport                         missing: frequencies
+  CJZ6     Black Lake Seaplane Base                   missing: runways, frequencies
+  CJZ9     La Ronge Seaplane Base                     missing: runways, frequencies
+  CKA9     Southend Airport / Hans Ulricksen Field    missing: frequencies
+  CKB2     Patuanak Airport                           missing: frequencies
+  CKB4     Otter Lake Seaplane Base                   missing: runways, frequencies
+  CKB5     Sandy Bay Seaplane Base                    missing: runways, frequencies
+  CKC2     Points North Landing Seaplane Base         missing: runways, frequencies
+  CKC6     Lanigan Airport                            missing: frequencies
+  CKC7     Rockglen Airport                           missing: frequencies
+  CKC9     Pangman Airport                            missing: frequencies
+  CKD2     Porcupine Plain Airport                    missing: frequencies
+  CKE2     Quill Lake Airport                         missing: frequencies
+  CKE4     Pelican Narrows Seaplane Base              missing: runways, frequencies
+  CKF2     Radville Airport                           missing: frequencies
+  CKF4     Goodsoil Airport                           missing: frequencies
+  CKG6     Uranium City Seaplane Base                 missing: runways, frequencies
+  CKH3     Debden Airport                             missing: frequencies
+  CKH7     Spiritwood Airport                         missing: frequencies
+  CKH8     Lumsden (Colhoun) Airport                  missing: frequencies
+  CKJ4     Hanley Airport                             missing: frequencies
+  CKJ9     Lemberg Airport                            missing: frequencies
+  CKK2     St. Brieux Airport                         missing: frequencies
+  CKK3     Scobey Border Station Airport              missing: runways, frequencies
+  CKK4     Estevan (South) Airport                    missing: frequencies
+  CKL6     Little Bear Lake Airport                   missing: frequencies
+  CKL9     Regina Beach Airport                       missing: frequencies
+  CKM4     Jan Lake Airport                           missing: frequencies
+  CKN5     Fillmore Airport                           missing: frequencies
+  CKN8     Nekweaga Bay Airport                       missing: frequencies
+  CKP2     Spring Valley (North) Airport              missing: frequencies
+  CKP5     Southend Seaplane Base                     missing: runways, frequencies
+  CKQ2     Squaw Rapids Airport                       missing: frequencies
+  CKQ8     McArthur River Airport                     missing: frequencies
+  CKS3     Cudworth Airport                           missing: frequencies
+  CKS6     Bryant Airport                             missing: frequencies
+  CKS7     Wadena Airport                             missing: frequencies
+  CKS8     Cree Lake (Crystal Lodge) Airport          missing: frequencies
+  CKT7     Wakaw Airport                              missing: frequencies
+  CKU3     Nipawin Seaplane Base                      missing: runways, frequencies
+  CKU4     Cut Knife Airport                          missing: frequencies
+  CKU5     Imperial Airport                           missing: frequencies
+  CKU6     Grenfell Airport                           missing: frequencies
+  CKU7     Watrous Airport                            missing: frequencies
+  CKV2     Kelvington Airport                         missing: frequencies
+  CKV6     Churchbridge Airport                       missing: frequencies
+  CKV7     Wawota Airport                             missing: frequencies
+  CKW5     Stony Rapids Seaplane Base                 missing: runways, frequencies
+  CKW6     Davin Lake Airport                         missing: frequencies
+  CKX5     Dinsmore Airport                           missing: frequencies
+  CKX8     Big River Airport                          missing: frequencies
+  CKY2     Whitewood Airport                          missing: frequencies
+  CLC4     Loon Creek Airfield                        missing: runways, frequencies
+  CPB5     Pilot Butte Airport                        missing: frequencies
+  CPV9     Poverty Valley Airport                     missing: frequencies
+  CRF5     Saskatoon/Richter Field Airport            missing: frequencies
+  CRL7     Reindeer Lake / Lindbergh Lodge Airstrip   missing: runways, frequencies
+  CTF5     Pierceland (Turchyn Field)                 missing: runways, frequencies
+  CWC1     White City (Radomsky) Airport              missing: frequencies
+  CYBU     Nipawin Airport                            missing: frequencies
+  CYKC     Collins Bay Airport                        missing: frequencies
+  CYKJ     Key Lake Airport                           missing: frequencies
+  CYNL     Points North Landing Airport               missing: frequencies
+  CYSF     Stony Rapids Airport                       missing: frequencies
+  CZFD     Fond-du-Lac Airport                        missing: frequencies
+  CZPO     Pinehouse Lake Airport                     missing: frequencies
+  CZWL     Wollaston Lake Airport                     missing: frequencies
+  JN9      Kenyon Lake Water Aerodrome                missing: runways, frequencies
