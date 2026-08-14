@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:core';
 import 'dart:isolate';
 import 'package:universal_io/io.dart';
+import 'package:avaremp/canada/canada_download.dart';
+import 'package:avaremp/canada/canada_import.dart';
 import 'package:avaremp/data/main_database_helper.dart';
 import 'package:avaremp/utils/faa_dates.dart';
 import 'package:avaremp/utils/path_utils.dart';
@@ -185,6 +187,9 @@ class Download {
     }
     if(!chart.check) {
       return false; // static files do not expire
+    }
+    if(chart.download is CanadaDownload) {
+      return CanadaDownload.isVersionExpired(version); // date, not FAA cycle
     }
 
     return current != version;
@@ -410,6 +415,10 @@ class Download {
       await Storage().checkDataExpiry();
       await Storage().checkChartsExist();
       await _invalidateSqlite();
+      if(chart.filename == "databasesx") {
+        // cycle update replaced main.db; restore Canadian rows if installed
+        await CanadaImport.reimportIfInstalled();
+      }
       callback(chart, 100); // done
     } catch (e) {
       callback(chart, -1);

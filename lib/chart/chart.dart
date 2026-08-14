@@ -71,6 +71,7 @@ class ChartCategory {
   static const String heli = "Helicopter";
   static const String plates = "Plates";
   static const String databases = "Databases";
+  static const String canada = "Canada";
   static const String csup = "CSUP";
   static const String elevation = "Elevation";
 

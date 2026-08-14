@@ -1,4 +1,5 @@
 
+import 'package:avaremp/canada/canada_download.dart';
 import 'package:avaremp/utils/faa_dates.dart';
 import 'package:avaremp/storage.dart';
 import 'package:avaremp/utils/toast.dart';
@@ -670,6 +671,14 @@ class DownloadScreenState extends State<DownloadScreen> {
       _absentColor,
       [
         Chart('DatabasesX', _absentColor, _absentIcon, 'databasesx', _stateAbsentNone, "", ValueNotifier<int>(0), true, Download(), true),
+      ],
+      false,
+    ),
+    ChartCategory(
+      ChartCategory.canada,
+      _absentColor,
+      [
+        Chart('Canada (OurAirports + Airspace)', _absentColor, _absentIcon, CanadaDownload.filename, _stateAbsentNone, "", ValueNotifier<int>(0), true, CanadaDownload(), true),
       ],
       false,
     ),
