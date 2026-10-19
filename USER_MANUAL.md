@@ -1114,6 +1114,24 @@ The same `PFD` drawn by the map layer, sized to this screen. The map `PFD` layer
 - Hold the **OBS** knobs to set a course; double-tap either knob to return to the GPS course (Section 4)
 - Elevation terrain and the lined-up runway are drawn the same way as on the map `PFD`
 
+
+### 9.10 Precision Approach
+
+Open: **Menu → Precision Approach** (under `PFD`)
+
+ILS-style guidance to a runway from GPS, meant for a centimetre-class RTK or PPP receiver feeding NMEA (UDP 49002, Bluetooth, or BLE UART). A port of the Pretty Precise Approach (PPA) survey app.
+
+- **Runway**: automatic by default, the same runway the PFD lines up with (within 10 NM, within 45° of its heading). Tap the runway icon to pick any runway end, or type an airport ID. RTK-surveyed runways show a green check and override the database geometry for both this screen and the PFD synthetic runway.
+- **Needles**: magenta localizer and glideslope bars, fly-to, on a two-dot scale. Beyond 200 m of the centerline the scale is angular (±2.5° lateral, ±0.7° vertical). Inside 200 m it switches to metres (±20 m lateral, ±15 m vertical) so RTK precision is usable on short final.
+- **Chevrons**: under the display, one per 2 m off centerline up to ten, pointing the way to fly; `○` within 2 m. Up/down arrows on the right at 3, 9 and 15 m from the glidepath.
+- **Readouts**: distance and height above threshold at the top, then cross-track, glidepath error, HAT, ground speed, actual glidepath angle, and track versus runway heading along the bottom.
+- **GPS badge**: `RTK FIX` (green), `RTK FLT` (yellow), `DGPS`, `GPS`, `ADS-B` or `INT GPS` (orange), with satellites, HDOP, correction age and the fix rate. The fix stream here is the receiver's own rate, not the 1 Hz map position. `STALE` after 2 s without a fix.
+- **Rollout**: over the pavement only the centerline guidance remains.
+- **Surveyed runways** (ruler icon): import PPA airport `.json` files (the `ppa_airports` community repository format) or PPA survey `.geojson` exports; list and delete them.
+- **Settings**: glideslope angle, threshold crossing height, chevron step, on-centerline tolerance.
+
+Experimental supplemental guidance. The geometry is only as good as the GPS fix and the runway survey; it is not an approved approach.
+
 ### 9.10 Link
 
 Open: **Menu → Link** (under `Connectivity`). Not available on web.

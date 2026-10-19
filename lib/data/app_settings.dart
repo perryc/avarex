@@ -127,6 +127,56 @@ class AppSettings {
     provider.setString("key-gps-source-mode", mode);
   }
 
+  // Precision approach (RTK ILS-like guidance)
+  double getApproachGlideslope() {
+    return provider.getValue("key-approach-glideslope", defaultValue: 3.0) as double;
+  }
+
+  void setApproachGlideslope(double value) {
+    provider.setDouble("key-approach-glideslope", value);
+  }
+
+  double getApproachTch() {
+    return provider.getValue("key-approach-tch-ft", defaultValue: 25.0) as double;
+  }
+
+  void setApproachTch(double value) {
+    provider.setDouble("key-approach-tch-ft", value);
+  }
+
+  double getApproachChevronStep() {
+    return provider.getValue("key-approach-chevron-step-m", defaultValue: 2.0) as double;
+  }
+
+  void setApproachChevronStep(double value) {
+    provider.setDouble("key-approach-chevron-step-m", value);
+  }
+
+  double getApproachTolerance() {
+    return provider.getValue("key-approach-tolerance-m", defaultValue: 2.0) as double;
+  }
+
+  void setApproachTolerance(double value) {
+    provider.setDouble("key-approach-tolerance-m", value);
+  }
+
+  bool getApproachAuto() {
+    return provider.getValue("key-approach-auto", defaultValue: true) as bool;
+  }
+
+  void setApproachAuto(bool value) {
+    provider.setBool("key-approach-auto", value);
+  }
+
+  /// Keep the screen awake and allow guidance from non-RTK fixes.
+  bool getApproachAllowNonRtk() {
+    return provider.getValue("key-approach-allow-non-rtk", defaultValue: true) as bool;
+  }
+
+  void setApproachAllowNonRtk(bool value) {
+    provider.setBool("key-approach-allow-non-rtk", value);
+  }
+
   String getGpsSourceMode() {
     return provider.getValue("key-gps-source-mode", defaultValue: "Auto") as String;
   }

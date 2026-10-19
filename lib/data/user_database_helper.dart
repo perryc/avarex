@@ -90,7 +90,7 @@ class UserDatabaseHelper {
     return
       await openDatabase(
           path,
-          version: 9,
+          version: 10,
           onUpgrade: (Database db, int oldVersion, int newVersion) async {
             if (oldVersion <= 4 && newVersion > 4) {
               await db.execute("create table aiQueries("
@@ -139,6 +139,30 @@ class UserDatabaseHelper {
                   "name         text, "
                   "settings     text, "
                   "unique(name) on conflict replace);");
+            }
+
+            // Migration to version 10: RTK-surveyed runways for precision approach.
+            if (oldVersion <= 9 && newVersion > 9) {
+              await db.execute("create table if not exists runway_survey ("
+                  "id           integer primary key autoincrement, "
+                  "airport      text, "
+                  "designator   text, "
+                  "ident1       text, "
+                  "ident2       text, "
+                  "t1_lat       real, "
+                  "t1_lon       real, "
+                  "t1_elev_ft   real, "
+                  "t2_lat       real, "
+                  "t2_lon       real, "
+                  "t2_elev_ft   real, "
+                  "width_ft     real, "
+                  "glideslope_deg real default 3, "
+                  "tch_ft       real default 25, "
+                  "accuracy_m   real, "
+                  "surveyed_by  text, "
+                  "survey_date_ms integer, "
+                  "source       text, "
+                  "unique(airport, designator) on conflict replace);");
             }
           },
 
@@ -257,6 +281,26 @@ class UserDatabaseHelper {
                 "name         text, "
                 "settings     text, "
                 "unique(name) on conflict replace);");
+            await db.execute("create table if not exists runway_survey ("
+                "id           integer primary key autoincrement, "
+                "airport      text, "
+                "designator   text, "
+                "ident1       text, "
+                "ident2       text, "
+                "t1_lat       real, "
+                "t1_lon       real, "
+                "t1_elev_ft   real, "
+                "t2_lat       real, "
+                "t2_lon       real, "
+                "t2_elev_ft   real, "
+                "width_ft     real, "
+                "glideslope_deg real default 3, "
+                "tch_ft       real default 25, "
+                "accuracy_m   real, "
+                "surveyed_by  text, "
+                "survey_date_ms integer, "
+                "source       text, "
+                "unique(airport, designator) on conflict replace);");
           },
           onOpen: (db) {});
   }
@@ -507,6 +551,28 @@ class UserDatabaseHelper {
     final db = await database;
     if (db != null) {
       return await db.query("profile", orderBy: "id desc");
+    }
+    return [];
+  }
+
+  Future<void> addRunwaySurvey(Map<String, dynamic> row) async {
+    final db = await database;
+    if (db != null) {
+      await DbGeneral.replace(db, "runway_survey", row);
+    }
+  }
+
+  Future<void> deleteRunwaySurvey(String airport, String designator) async {
+    final db = await database;
+    if (db != null) {
+      await db.delete("runway_survey", where: "airport = ? and designator = ?", whereArgs: [airport, designator]);
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getAllRunwaySurveys() async {
+    final db = await database;
+    if (db != null) {
+      return await db.query("runway_survey", orderBy: "airport, designator");
     }
     return [];
   }

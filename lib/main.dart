@@ -1,5 +1,6 @@
 import 'package:avaremp/logbook/logbook_screen.dart';
 import 'package:avaremp/instruments/pfd_screen.dart';
+import 'package:avaremp/instruments/precision_approach_screen.dart';
 import 'package:avaremp/longpress_screen.dart';
 import 'package:avaremp/place/airspace_3d_screen.dart';
 import 'package:avaremp/plan/plan_action_screen.dart';
@@ -116,6 +117,7 @@ class MainApp extends StatelessWidget {
               '/notes': (context) => const WritingScreen(),
               '/airspace3d': (context) => const Airspace3DScreen(),
               '/pfd': (context) => const PfdScreen(),
+              '/approach': (context) => const PrecisionApproachScreen(),
               '/plan_actions': (context) => const PlanActionScreen(),
               '/ai': (context) => const AiScreen(),
               '/backup': (context) => const BackupScreen(),

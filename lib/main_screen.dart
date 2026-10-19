@@ -353,6 +353,16 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver { //
                       ),
                       _buildMenuItem(
                         context,
+                        icon: MdiIcons.airplaneLanding,
+                        title: "Precision Approach",
+                        subtitle: "RTK GPS ILS-style guidance to a surveyed runway",
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.pushNamed(context, '/approach');
+                        },
+                      ),
+                      _buildMenuItem(
+                        context,
                         icon: MdiIcons.checkboxMarkedOutline,
                         title: "Check Lists",
                         subtitle: "Pre-flight & procedures",

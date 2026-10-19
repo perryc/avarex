@@ -16,6 +16,22 @@ class NmeaOwnShipMessage extends NmeaMessage {
   double velocity = 0;
   double verticalSpeed = 0;
   double heading = 0;
+  /// From the GGA sentence when one has been seen (see [GGAMessage]).
+  int fixQuality = 0;
+  int satellites = 0;
+  double hdop = 99;
+  double geoidSeparation = 0;
+  double? diffAge;
+  bool hasGga = false;
+
+  void _copyQuality(GGAMessage gga) {
+    fixQuality = gga.fixQuality;
+    satellites = gga.satellites;
+    hdop = gga.hdop;
+    geoidSeparation = gga.geoidSeparation;
+    diffAge = gga.diffAge;
+    hasGga = true;
+  }
 
   NmeaOwnShipMessage(super.type);
 
@@ -25,13 +41,14 @@ class NmeaOwnShipMessage extends NmeaMessage {
       // bug
     }
     else if(gga == null && rmc != null) {
-      m.velocity = rmc.speed.toDouble();
-      m.heading = rmc.track.toDouble();
+      m.velocity = rmc.speed;
+      m.heading = rmc.track;
       m.coordinates = rmc.coordinate;
     }
     else if(gga != null && rmc == null) {
       m.coordinates = gga.coordinate;
-      m.altitude = gga.altitude.toDouble();
+      m.altitude = gga.altitude;
+      m._copyQuality(gga);
     }
     else if(gga != null && rmc != null) {
       Duration diff = gga.time.difference(rmc.time);
@@ -42,9 +59,10 @@ class NmeaOwnShipMessage extends NmeaMessage {
       else {
         m.coordinates = rmc.coordinate;
       }
-      m.altitude = gga.altitude.toDouble();
-      m.velocity = rmc.speed.toDouble();
-      m.heading = rmc.track.toDouble();
+      m.altitude = gga.altitude;
+      m.velocity = rmc.speed;
+      m.heading = rmc.track;
+      m._copyQuality(gga);
     }
     return (m);
   }
