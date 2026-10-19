@@ -57,6 +57,8 @@ import 'instruments/flight_timer.dart';
 import 'gdl90/message.dart';
 import 'utils/geojson_parser.dart';
 import 'io/gps.dart';
+import 'instruments/runway_survey.dart';
+import 'io/gps_fix.dart';
 import 'io/gps_kalman.dart';
 import 'nmea/nmea_buffer.dart';
 import 'nmea/nmea_message.dart';
@@ -75,6 +77,9 @@ class Storage {
   final pfdChange = ValueNotifier<int>(0);
   // on gps update
   final gpsChange = ValueNotifier<Position>(Gps.fromLatLng(LatLng(0, 0)));
+  /// Every decoded fix as it arrives (up to receiver rate), with fix quality.
+  /// gpsChange above is the 1 Hz fused position; precision guidance uses this.
+  final rawFixChange = ValueNotifier<GpsFix?>(null);
   // when plate changes
   final plateChange = ValueNotifier<int>(0);
   // when plate sync switches the airport (route.change also ticks every GPS update)
@@ -322,6 +327,7 @@ class Storage {
             _lastMsGpsSignal = DateTime.now().millisecondsSinceEpoch; // update time when GPS signal was last received
             _lastMsExternalSignal = _lastMsGpsSignal; // start ignoring internal GPS
             _gpsStack.push(p);
+            rawFixChange.value = GpsFix.fromPosition(p, GpsFixSource.adsb);
             // Record additional ownship settings for audible alerts (among other interested parties)--or perhaps these can just reside here in Storage?
             vSpeed = m.verticalSpeed;
             airborne = m.airborne;
@@ -367,6 +373,9 @@ class Storage {
             vSpeed = m0.verticalSpeed;
             airborne = m0.altitude > 100;
             _gpsStack.push(p);
+            rawFixChange.value = GpsFix.fromPosition(p, GpsFixSource.nmea,
+                fixQuality: m0.hasGga ? m0.fixQuality : GpsFix.qualityGps,
+                satellites: m0.satellites, hdop: m0.hdop, diffAgeS: m0.diffAge);
             tracks.add(p);
           }
         } catch (e, st) {
@@ -398,6 +407,7 @@ class Storage {
           }
           _lastMsGpsSignal = DateTime.now().millisecondsSinceEpoch; // update time when GPS signal was last received
           _gpsStack.push(data);
+          rawFixChange.value = GpsFix.fromPosition(data, GpsFixSource.internal);
           tracks.add(data);
         } // provide internal GPS when external is not available
       });
@@ -495,6 +505,8 @@ class Storage {
     trafficCache = TrafficCache(settings.getTrafficPuckSize());
     themeNotifier = ValueNotifier<ThemeData>(Storage().settings.isLightMode() ? ThemeData.light() : ThemeData.dark());
     units = UnitConversion(settings.getUnits());
+    // RTK-surveyed runways for the PFD synthetic runway and precision approach
+    await RunwaySurveyStore().load();
     flightTimer = FlightTimer(true, 0, timeChange);
     flightDownTimer = FlightTimer(false, 30 * 60, timeChange); // 30 minute down timer
     WakelockPlus.enable().onError(

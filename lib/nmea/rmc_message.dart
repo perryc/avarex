@@ -7,8 +7,10 @@ class RMCMessage extends NmeaMessage {
   RMCMessage(super.type);
 
   LatLng coordinate = const LatLng(0, 0);
-  int speed = 0;
-  int track = 0;
+  /// Ground speed in m/s and true track in degrees, kept as doubles so an
+  /// RTK receiver's resolution is not thrown away.
+  double speed = 0;
+  double track = 0;
 
   @override
   void parse(String data) {
@@ -37,8 +39,8 @@ class RMCMessage extends NmeaMessage {
 
       coordinate = LatLng(lat, lon);
 
-      speed = (double.parse(tokens[7]) * Storage().units.toMps).round();
-      track = double.parse(tokens[8]).round();
+      speed = double.parse(tokens[7]) * Storage().units.toMps;
+      track = tokens[8].trim().isEmpty ? 0 : double.parse(tokens[8]);
 
     }
     catch (e) {
