@@ -159,6 +159,7 @@ class _AircraftPerformanceScreenState extends State<AircraftPerformanceScreen> {
   final _customCruiseTasController = TextEditingController();
   final _customFuelEnduranceController = TextEditingController();
   final _customSinkRateController = TextEditingController();
+  final _customBestGlideController = TextEditingController();
   
   // Dynamic POH entries (combined tables)
   List<_TakeoffLandingEntry> _customTakeoffEntries = [];
@@ -455,6 +456,7 @@ class _AircraftPerformanceScreenState extends State<AircraftPerformanceScreen> {
       _customCruiseTasController.text = aircraft.cruiseTas;
       _customFuelEnduranceController.text = aircraft.fuelEndurance;
       _customSinkRateController.text = aircraft.sinkRate;
+      _customBestGlideController.text = aircraft.bestGlide;
     } catch (e) {
       // Aircraft not in database (predefined), use defaults
       _customWake = 'LIGHT';
@@ -470,6 +472,7 @@ class _AircraftPerformanceScreenState extends State<AircraftPerformanceScreen> {
       _customCruiseTasController.clear();
       _customFuelEnduranceController.clear();
       _customSinkRateController.clear();
+      _customBestGlideController.clear();
     }
     
     if (a.hasRawEntries) {
@@ -864,6 +867,7 @@ class _AircraftPerformanceScreenState extends State<AircraftPerformanceScreen> {
     _customCruiseTasController.dispose();
     _customFuelEnduranceController.dispose();
     _customSinkRateController.dispose();
+    _customBestGlideController.dispose();
     super.dispose();
   }
 
@@ -985,8 +989,8 @@ class _AircraftPerformanceScreenState extends State<AircraftPerformanceScreen> {
             'Takeoff Performance (POH Interpolated)',
             Icons.flight_takeoff,
             [
-              _ResultRow('Ground Roll', '${groundRoll.round()} ft'),
-              _ResultRow('Over 50ft Obstacle', '${distance50.round()} ft'),
+              _ResultRow('Ground Roll', '${groundRoll.round()}'),
+              _ResultRow('Over 50ft Obstacle', '${distance50.round()}'),
               _ResultRow('Density Altitude', '${densityAlt.round()} ft'),
             ],
             groundRoll > 3000 ? Colors.red : (groundRoll > 2000 ? Colors.orange : Colors.green),
@@ -999,7 +1003,7 @@ class _AircraftPerformanceScreenState extends State<AircraftPerformanceScreen> {
               _buildTextField('Pressure Altitude (ft)', _takeoffPressureAltController, keyboard: TextInputType.number),
               _buildTextField('Temperature (°C)', _takeoffTempController, keyboard: const TextInputType.numberWithOptions(signed: true, decimal: true)),
               _buildTextField('Takeoff Weight (lbs)', _takeoffWeightController, keyboard: TextInputType.number),
-              _buildTextField('Headwind (kts, negative=tailwind)', _takeoffHeadwindController, keyboard: const TextInputType.numberWithOptions(signed: true)),
+              _buildTextField('Headwind (negative=tailwind)', _takeoffHeadwindController, keyboard: const TextInputType.numberWithOptions(signed: true)),
               _buildSwitch('Soft/Grass Field', _takeoffSoftField, (v) => setState(() => _takeoffSoftField = v)),
             ],
           ),
@@ -1034,8 +1038,8 @@ class _AircraftPerformanceScreenState extends State<AircraftPerformanceScreen> {
             'Landing Performance (POH Interpolated)',
             Icons.flight_land,
             [
-              _ResultRow('Ground Roll', '${groundRoll.round()} ft'),
-              _ResultRow('Over 50ft Obstacle', '${distance50.round()} ft'),
+              _ResultRow('Ground Roll', '${groundRoll.round()}'),
+              _ResultRow('Over 50ft Obstacle', '${distance50.round()}'),
               _ResultRow('Density Altitude', '${densityAlt.round()} ft'),
             ],
             groundRoll > 2500 ? Colors.red : (groundRoll > 1500 ? Colors.orange : Colors.green),
@@ -1048,7 +1052,7 @@ class _AircraftPerformanceScreenState extends State<AircraftPerformanceScreen> {
               _buildTextField('Pressure Altitude (ft)', _landingPressureAltController, keyboard: TextInputType.number),
               _buildTextField('Temperature (°C)', _landingTempController, keyboard: const TextInputType.numberWithOptions(signed: true, decimal: true)),
               _buildTextField('Landing Weight (lbs)', _landingWeightController, keyboard: TextInputType.number),
-              _buildTextField('Headwind (kts, negative=tailwind)', _landingHeadwindController, keyboard: const TextInputType.numberWithOptions(signed: true)),
+              _buildTextField('Headwind (negative=tailwind)', _landingHeadwindController, keyboard: const TextInputType.numberWithOptions(signed: true)),
               _buildSwitch('Soft/Grass Field', _landingSoftField, (v) => setState(() => _landingSoftField = v)),
             ],
           ),
@@ -1078,10 +1082,10 @@ class _AircraftPerformanceScreenState extends State<AircraftPerformanceScreen> {
             'Cruise Performance (POH Interpolated)',
             MdiIcons.airplane,
             [
-              _ResultRow('True Airspeed', '${performance.ktas.round()} kts'),
+              _ResultRow('True Airspeed', '${performance.ktas.round()}'),
               _ResultRow('Fuel Flow', '${performance.gph.toStringAsFixed(1)} gph'),
               _ResultRow('Endurance (no reserve)', '${enduranceHours.toStringAsFixed(1)} hrs'),
-              _ResultRow('Range (w/ 45min reserve)', '${range.round()} nm'),
+              _ResultRow('Range (w/ 45min reserve)', '${range.round()}'),
             ],
             Colors.blue,
           ),
@@ -1968,9 +1972,10 @@ class _AircraftPerformanceScreenState extends State<AircraftPerformanceScreen> {
               _buildTextField('Max Gross Weight (lbs)', _customMaxWeightController, keyboard: TextInputType.number),
               _buildTextField('Empty Weight (lbs)', _customEmptyWeightController, keyboard: TextInputType.number),
               _buildTextField('Usable Fuel (gal)', _customUsableFuelController, keyboard: const TextInputType.numberWithOptions(decimal: true)),
-              _buildTextField('Cruise Speed (ktas)', _customCruiseTasController, keyboard: TextInputType.number, tooltip: 'Cruise true airspeed in knots'),
+              _buildTextField('Cruise Speed', _customCruiseTasController, keyboard: TextInputType.number, tooltip: 'Cruise true airspeed'),
               _buildTextField('Fuel Endurance (hrs)', _customFuelEnduranceController, keyboard: const TextInputType.numberWithOptions(decimal: true)),
-              _buildTextField('Sink Rate (fpm)', _customSinkRateController, keyboard: TextInputType.number),
+              _buildTextField('Best Glide Speed', _customBestGlideController, keyboard: TextInputType.number, tooltip: 'POH best-glide speed used by the map glide circle'),
+              _buildTextField('Sink Rate (fpm)', _customSinkRateController, keyboard: TextInputType.number, tooltip: 'Power-off sink rate at best glide, used by the map glide circle'),
               _buildWakeDropdown(),
             ],
           ),
@@ -2015,10 +2020,10 @@ class _AircraftPerformanceScreenState extends State<AircraftPerformanceScreen> {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Expanded(child: _buildTextField('Headwind (%/kt)', _customToHeadwindController, 
+                        Expanded(child: _buildTextField('Headwind (%)', _customToHeadwindController, 
                           keyboard: const TextInputType.numberWithOptions(decimal: true))),
                         const SizedBox(width: 8),
-                        Expanded(child: _buildTextField('Tailwind (%/kt)', _customToTailwindController, 
+                        Expanded(child: _buildTextField('Tailwind (%)', _customToTailwindController, 
                           keyboard: const TextInputType.numberWithOptions(decimal: true))),
                         const SizedBox(width: 8),
                         Expanded(child: _buildTextField('Soft Field (%)', _customToSoftFieldController, 
@@ -2057,10 +2062,10 @@ class _AircraftPerformanceScreenState extends State<AircraftPerformanceScreen> {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Expanded(child: _buildTextField('Headwind (%/kt)', _customLdHeadwindController, 
+                        Expanded(child: _buildTextField('Headwind (%)', _customLdHeadwindController, 
                           keyboard: const TextInputType.numberWithOptions(decimal: true))),
                         const SizedBox(width: 8),
-                        Expanded(child: _buildTextField('Tailwind (%/kt)', _customLdTailwindController, 
+                        Expanded(child: _buildTextField('Tailwind (%)', _customLdTailwindController, 
                           keyboard: const TextInputType.numberWithOptions(decimal: true))),
                         const SizedBox(width: 8),
                         Expanded(child: _buildTextField('Soft Field (%)', _customLdSoftFieldController, 
@@ -2286,7 +2291,7 @@ class _AircraftPerformanceScreenState extends State<AircraftPerformanceScreen> {
                   Expanded(flex: 2, child: Text('Alt', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10), textAlign: TextAlign.center)),
                   Expanded(flex: 2, child: Text('Temp', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10), textAlign: TextAlign.center)),
                   Expanded(flex: 2, child: Text('Pwr%', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10), textAlign: TextAlign.center)),
-                  Expanded(flex: 2, child: Text('KTAS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10), textAlign: TextAlign.center)),
+                  Expanded(flex: 2, child: Text('TAS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10), textAlign: TextAlign.center)),
                   Expanded(flex: 2, child: Text('GPH', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10), textAlign: TextAlign.center)),
                   SizedBox(width: 40),
                 ],
@@ -2496,6 +2501,7 @@ class _AircraftPerformanceScreenState extends State<AircraftPerformanceScreen> {
       pic: _customPicController.text.toUpperCase().trim(),
       picInfo: _customPicInfoController.text.toUpperCase().trim(),
       sinkRate: _customSinkRateController.text.trim(),
+      bestGlide: _customBestGlideController.text.trim(),
       fuelBurn: usableFuel > 0 && _customCruiseEntries.isNotEmpty
           ? _customCruiseEntries.first.gph.toStringAsFixed(1)
           : '',
@@ -2621,6 +2627,7 @@ class _AircraftPerformanceScreenState extends State<AircraftPerformanceScreen> {
     _customCruiseTasController.clear();
     _customFuelEnduranceController.clear();
     _customSinkRateController.clear();
+    _customBestGlideController.clear();
   }
 
   Widget _buildPohNoteCard() {

@@ -1,12 +1,20 @@
+import 'dart:async';
 import 'dart:math';
 
+import 'package:avaremp/instruments/cdi_vdi.dart';
+import 'package:avaremp/instruments/pfd_runway.dart';
 import 'package:avaremp/storage.dart';
+import 'package:avaremp/utils/elevation_tile_provider.dart';
+import 'package:avaremp/utils/geo_calculations.dart';
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart' hide Path;
+
+enum PfdObsKnob { ccw, cw }
 
 class PfdPainter extends CustomPainter {
 
 
-  PfdPainter({required ValueNotifier repaint, required height, required width}) : super(repaint: repaint) {
+  PfdPainter({required Listenable repaint, required height, required width}) : super(repaint: repaint) {
     _height = height;
     _width = width;
   }
@@ -41,20 +49,48 @@ class PfdPainter extends CustomPainter {
   /// PAn the whole drawing up with this fraction of screen to utilize maximum screen
   static const double yPan = 0.125;
 
-  /// Xform 0,0 in center, and (100, 100) on top right, and (-100, -100) on bottom left
-  /// @param yval
-  /// @return
-  double _y(double yval) {
-    double yPercent = _height / 200;
-    return _height / 2 - yval * yPercent - _height * yPan;
-  }
+  static const double _obsKnobMargin = 8;
 
   /// Xform 0,0 in center, and (100, 100) on top right, and (-100, -100) on bottom left
-  /// @param xval
-  /// @return
-  double _x(double xval) {
-    double xPercent = _width / 200;
-    return _width / 2 + xval * xPercent;
+  static double yOf(double yval, double height) {
+    return height / 2 - yval * (height / 200) - height * yPan;
+  }
+
+  static double xOf(double xval, double width) {
+    return width / 2 + xval * (width / 200);
+  }
+
+  double _y(double yval) => yOf(yval, _height);
+
+  double _x(double xval) => xOf(xval, _width);
+
+  static Offset compassCenter(double width, double height) =>
+      Offset(xOf(0, width), yOf(-95, height));
+
+  static Offset obsCcwOffset(double width, double height) {
+    final double r = obsKnobRadius(height);
+    return Offset(xOf(-65, width), height - _obsKnobMargin - r);
+  }
+
+  static Offset obsCwOffset(double width, double height) {
+    final double r = obsKnobRadius(height);
+    return Offset(xOf(67.5, width), height - _obsKnobMargin - r);
+  }
+
+  static double obsKnobRadius(double height) => yOf(0, height) - yOf(8, height);
+
+  static double obsHitRadius(double height) => max(18, obsKnobRadius(height) * 1.25);
+
+  /// Which OBS hold-knob contains [local], if any.
+  static PfdObsKnob? hitObsKnob(Offset local, double width, double height) {
+    final double r = obsHitRadius(height);
+    if ((local - obsCcwOffset(width, height)).distance <= r) {
+      return PfdObsKnob.ccw;
+    }
+    if ((local - obsCwOffset(width, height)).distance <= r) {
+      return PfdObsKnob.cw;
+    }
+    return null;
   }
 
 
@@ -102,6 +138,10 @@ class PfdPainter extends CustomPainter {
 
     paintFill.color = const Color(0xFF624624);
     drawRect(_x(-400), _y(0), _x(400), _y(-pitchDegree * 90), paintFill);
+
+    // synthetic terrain then runway, same horizon frame as pitch / roll
+    _drawTerrain(canvas, pfd);
+    _drawRunway(canvas, pfd);
 
     //center attitude degrees
     drawLine(_x(-150), _y(0), _x(150), _y(0), paintStroke);
@@ -584,8 +624,50 @@ class PfdPainter extends CustomPainter {
     path.lineTo(_x(-5), _y(-80));
     path.lineTo(_x(5), _y(-80));
     canvas.drawPath(path, paintFill);
-    drawLine(_x(pfd.cdi * 5), _y(-105), _x(pfd.cdi * 5), _y(-85), paintStroke);
+    final double cdi = pfd.displayedCdi;
+    drawLine(_x(cdi * 5), _y(-105), _x(cdi * 5), _y(-85), paintStroke);
     canvas.restore();
+
+    // OBS knobs under the speed and altitude tapes, on the bottom edge.
+    final bool obsSet = pfd.obs != null;
+    final double knobR = obsKnobRadius(_height);
+    final Offset ccwKnob = obsCcwOffset(_width, _height);
+    final Offset cwKnob = obsCwOffset(_width, _height);
+    void drawObsKnob(Offset c, IconData icon) {
+      paintFill.color = obsSet ? Colors.white : Colors.black;
+      paintStroke.color = Colors.white;
+      paintStroke.strokeWidth = 2;
+      canvas.drawCircle(c, knobR, paintFill);
+      canvas.drawCircle(c, knobR, paintStroke);
+      paintText.text = TextSpan(
+        text: String.fromCharCode(icon.codePoint),
+        style: TextStyle(
+          fontSize: knobR * 1.35,
+          fontFamily: icon.fontFamily,
+          package: icon.fontPackage,
+          color: obsSet ? Colors.black : Colors.white,
+        ),
+      );
+      paintText.layout();
+      paintText.paint(canvas,
+          Offset(c.dx - paintText.width / 2, c.dy - paintText.height / 2));
+      paintText.text = TextSpan(
+        text: "OBS",
+        style: TextStyle(
+          fontSize: _height / 55,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+        ),
+      );
+      paintText.layout();
+      paintText.paint(
+          canvas,
+          Offset(c.dx - paintText.width / 2,
+              c.dy - knobR - paintText.height));
+    }
+    drawObsKnob(ccwKnob, Icons.rotate_left);
+    drawObsKnob(cwKnob, Icons.rotate_right);
+    paintStroke.strokeWidth = 1.5;
 
 
     //draw course
@@ -634,9 +716,419 @@ class PfdPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) {
     return true;
   }
+
+  // ------------------------------------------------------------------
+  // Synthetic runway (pilot's perspective)
+  // ------------------------------------------------------------------
+
+  /// Points closer than this (ft) along the view axis are clipped.
+  static const double _zNear = 3;
+
+  /// Half field of view kept after clipping, as tan(angle). 3 ≈ 71.5°, which
+  /// bounds projected coordinates to about 3.4 × height from the center.
+  static const double _frustumK = 3;
+
+  /// Pilot eye height above the pavement when GPS says we are on / below it.
+  static const double _eyeHeightFt = 6;
+
+  static const Color _surfaceColor = Color(0xE6404040);
+  static final Color _markingColor = Colors.white.withValues(alpha: 0.9);
+  static const Color _terrainBrown = Color(0xFF624624);
+  static const Color _terrainRed = Color(0xCCFF0000);
+
+  /// Focal length in pixels, chosen so one degree of elevation at the center
+  /// of view spans the same pixels as one degree on the pitch ladder.
+  double get _focalPx => (_height / 200) * pitchDegree / tan(pi / 180);
+
+  void _drawTerrain(Canvas canvas, PfdData pfd) {
+    final PfdTerrain? mesh = pfd.terrain;
+    if (mesh == null || mesh.cols < 2 || mesh.rows < 2) return;
+    final double lat;
+    final double lon;
+    final double altFt;
+    final double trackTrue;
+    try {
+      final pos = Storage().position;
+      lat = pos.latitude;
+      lon = pos.longitude;
+      altFt = GeoCalculations.convertAltitude(pos.altitude);
+      trackTrue = pos.heading;
+    } catch (_) {
+      return;
+    }
+    final double headingTrue = pfd.ahrsHeadingLive
+        ? (pfd.yaw + Storage().area.variation + 360) % 360
+        : trackTrue;
+    final double h = GeoCalculations.toRadians(headingTrue);
+    final double cosH = cos(h);
+    final double sinH = sin(h);
+    final double cosLat = cos(GeoCalculations.toRadians(lat));
+    final double? ground = Storage().area.elevation;
+    // Sit above the surface so a level look still sees a receding 3D floor,
+    // and so hills rise into the sky instead of painting the horizon.
+    final double camUp = max(altFt, ground ?? altFt) + 20;
+    final double f = _focalPx;
+    final double cx = _x(0);
+    final double cy = _y(0);
+
+    _P3 camAt(LatLng p, double elev) {
+      final double n = (p.latitude - lat) * PfdRunwayEnd.ftPerDegLat;
+      final double e = (p.longitude - lon) * PfdRunwayEnd.ftPerDegLat * cosLat;
+      final double dU = elev - camUp - (n * n + e * e) / (2 * PfdRunwayEnd.earthRadiusFt);
+      return _P3(e * cosH - n * sinH, dU, n * cosH + e * sinH);
+    }
+
+    Offset project(_P3 p) => Offset(cx + f * p.x / p.z, cy - f * p.y / p.z);
+
+    Color bandColor(double elev) =>
+        PfdTerrain.isRed(elev, altFt) ? _terrainRed : _terrainBrown;
+
+    final Paint fill = Paint()..style = PaintingStyle.fill;
+    void facet(_P3 a, _P3 b, _P3 c, _P3 d, Color base) {
+      final List<_P3> clip = (a.z > 40 && b.z > 40 && c.z > 40 && d.z > 40)
+          ? [a, b, c, d]
+          : _clipPolygon([a, b, c, d]);
+      if (clip.length < 3) return;
+      fill.color = base;
+      final Path path = Path()..moveTo(project(clip[0]).dx, project(clip[0]).dy);
+      for (int i = 1; i < clip.length; i++) {
+        final Offset o = project(clip[i]);
+        path.lineTo(o.dx, o.dy);
+      }
+      path.close();
+      canvas.drawPath(path, fill);
+    }
+
+    // Far rows first so nearer slopes occlude distant ones.
+    for (int r = mesh.rows - 2; r >= 0; r--) {
+      for (int c = 0; c < mesh.cols - 1; c++) {
+        final int i00 = r * mesh.cols + c;
+        final int i10 = i00 + 1;
+        final int i01 = i00 + mesh.cols;
+        final int i11 = i01 + 1;
+        final double? e00 = mesh.elevFt[i00];
+        final double? e10 = mesh.elevFt[i10];
+        final double? e01 = mesh.elevFt[i01];
+        final double? e11 = mesh.elevFt[i11];
+        if (e00 == null || e10 == null || e01 == null || e11 == null) continue;
+        facet(
+          camAt(mesh.pts[i00], e00),
+          camAt(mesh.pts[i10], e10),
+          camAt(mesh.pts[i11], e11),
+          camAt(mesh.pts[i01], e01),
+          bandColor(max(max(e00, e10), max(e01, e11))),
+        );
+      }
+    }
+  }
+
+  void _drawRunway(Canvas canvas, PfdData pfd) {
+    final PfdRunwayEnd? rw = pfd.runway;
+    if (rw == null) {
+      return;
+    }
+    final double lat;
+    final double lon;
+    final double altFt;
+    final double trackTrue;
+    try {
+      final pos = Storage().position;
+      lat = pos.latitude;
+      lon = pos.longitude;
+      altFt = GeoCalculations.convertAltitude(pos.altitude);
+      trackTrue = pos.heading;
+    } catch (_) {
+      return; // no position yet
+    }
+
+    // Camera in the runway frame.
+    final (camAlong, camCross) = rw.frameOf(lat, lon);
+    final double camUp = max(altFt, rw.elevationAt(camAlong) + _eyeHeightFt);
+    final double headingTrue = pfd.ahrsHeadingLive
+        ? (pfd.yaw + Storage().area.variation + 360) % 360
+        : trackTrue;
+    final double rel = GeoCalculations.toRadians(headingTrue - rw.headingTrue);
+    final double cosR = cos(rel);
+    final double sinR = sin(rel);
+    final double f = _focalPx;
+    final double cx = _x(0);
+    final double cy = _y(0);
+
+    // Runway frame (along, cross, up) -> camera frame (x right, y up, z fwd).
+    _P3 cam(double along, double cross, [double? up]) {
+      final double dA = along - camAlong;
+      final double dC = cross - camCross;
+      final double dU = (up ?? rw.elevationAt(along)) - camUp
+          - (dA * dA + dC * dC) / (2 * PfdRunwayEnd.earthRadiusFt);
+      return _P3(dC * cosR - dA * sinR, dU, dA * cosR + dC * sinR);
+    }
+
+    Offset project(_P3 p) => Offset(cx + f * p.x / p.z, cy - f * p.y / p.z);
+
+    final Paint fill = Paint()..style = PaintingStyle.fill;
+    final Paint stroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..color = _markingColor;
+
+    void polygon(List<_P3> pts, Color color) {
+      final List<_P3> c = _clipPolygon(pts);
+      if (c.length < 3) return;
+      final Path path = Path()..moveTo(project(c[0]).dx, project(c[0]).dy);
+      for (int i = 1; i < c.length; i++) {
+        final Offset o = project(c[i]);
+        path.lineTo(o.dx, o.dy);
+      }
+      path.close();
+      fill.color = color;
+      canvas.drawPath(path, fill);
+    }
+
+    void line(_P3 a, _P3 b) {
+      final List<_P3>? c = _clipSegment(a, b);
+      if (c == null) return;
+      canvas.drawLine(project(c[0]), project(c[1]), stroke);
+    }
+
+    // Quad in runway frame: along a0..a1, cross c0..c1.
+    void quad(double a0, double a1, double c0, double c1, Color color) {
+      polygon([cam(a0, c0), cam(a0, c1), cam(a1, c1), cam(a1, c0)], color);
+    }
+
+    final double w = rw.widthFt;
+    final double hw = w / 2;
+    final double len = rw.lengthFt;
+    final double thr = rw.displacedFt;
+    final double farThr = len - rw.farDisplacedFt;
+    final double usable = farThr - thr;
+
+    // Pavement and edges.
+    quad(0, len, -hw, hw, _surfaceColor);
+    line(cam(0, -hw), cam(len, -hw));
+    line(cam(0, hw), cam(len, hw));
+    line(cam(0, -hw), cam(0, hw));
+    line(cam(len, -hw), cam(len, hw));
+
+    // Centerline paint width. FAA is 3 ft; that vanishes on a phone-sized PFD,
+    // so we draw a stripe wide enough to read from a couple of miles out.
+    final double clw = max(8.0, w * 0.10);
+
+    // Displaced threshold, AIM FIG 2-3-4: arrows along the former centerline
+    // (shaft + head) and a row of arrowheads just before the 10 ft bar.
+    // No dashed centerline in this area.
+    if (thr > 0) {
+      const double shaftLen = 90;
+      const double headLen = 28;
+      final double headHalf = min(16.0, hw * 0.28);
+      void arrow(double tip) {
+        final double base = tip - headLen;
+        final double tail = base - shaftLen;
+        if (tail < 0) return;
+        quad(tail, base, -clw / 2, clw / 2, _markingColor);
+        polygon([
+          cam(tip, 0),
+          cam(base, -headHalf),
+          cam(base, headHalf),
+        ], _markingColor);
+      }
+      // Space arrows so the last shaft stays clear of the arrowhead row.
+      for (double tip = 40 + shaftLen + headLen; tip < thr - 70; tip += 200) {
+        arrow(tip);
+      }
+      // Four (or six) arrowheads across the width, immediately before the bar.
+      final int heads = w >= 150 ? 6 : 4;
+      final double span = hw * 0.72;
+      final double rowTip = thr - 14;
+      final double rowBase = rowTip - 22;
+      for (int k = 0; k < heads; k++) {
+        final double c = -span + (2 * span) * (k + 0.5) / heads;
+        polygon([
+          cam(rowTip, c),
+          cam(rowBase, c - headHalf * 0.7),
+          cam(rowBase, c + headHalf * 0.7),
+        ], _markingColor);
+      }
+      quad(thr - 10, thr, -hw, hw, _markingColor); // 10 ft threshold bar
+    }
+    line(cam(thr, -hw), cam(thr, hw));
+    line(cam(farThr, -hw), cam(farThr, hw));
+
+    // Threshold stripes, count per FAA runway width table.
+    int stripes = w <= 60 ? 4 : w <= 75 ? 6 : w <= 100 ? 8 : w <= 150 ? 12 : 16;
+    while (stripes > 2 && (stripes / 2) * 11.5 > hw - 3) {
+      stripes -= 2;
+    }
+    void thresholdStripes(double a0, double a1) {
+      for (int k = 0; k < stripes ~/ 2; k++) {
+        final double c0 = 5.75 + k * 11.5;
+        final double c1 = c0 + 5.75;
+        quad(a0, a1, c0, c1, _markingColor);
+        quad(a0, a1, -c1, -c0, _markingColor);
+      }
+    }
+    if (usable > 400) {
+      thresholdStripes(thr + 20, thr + 170);
+      thresholdStripes(farThr - 170, farThr - 20);
+    }
+
+    // Runway designation, AIM: after the threshold stripes, on the centerline.
+    // Leave a gap so the dashed centerline does not run through the numbers.
+    const double numGapAfterStripes = 20;
+    const double numGapBeforeCl = 40;
+    double numH = 60;
+    double nearNum0 = 0, nearNum1 = 0, farNum0 = 0, farNum1 = 0;
+    bool drawNums = usable > 500;
+    if (drawNums) {
+      numH = min(60.0, (usable - 400) / 2).clamp(28.0, 60.0);
+      nearNum0 = thr + 170 + numGapAfterStripes;
+      nearNum1 = nearNum0 + numH;
+      farNum1 = farThr - 170 - numGapAfterStripes;
+      farNum0 = farNum1 - numH;
+      if (farNum0 < nearNum1 + 80) {
+        drawNums = false;
+      }
+    }
+
+    // Thousand-foot (aiming point) markers.
+    if (usable >= 2400) {
+      quad(thr + 1000, thr + 1150, 0.24 * w, 0.44 * w, _markingColor);
+      quad(thr + 1000, thr + 1150, -0.44 * w, -0.24 * w, _markingColor);
+    }
+
+    // Centerline: 120 ft stripes, 80 ft gaps. Starts after the near number
+    // and stops before the far number.
+    final double cl0 = drawNums ? nearNum1 + numGapBeforeCl : thr + 200;
+    final double cl1 = drawNums ? farNum0 - numGapBeforeCl : farThr - 200;
+    for (double a = cl0; a + 120 <= cl1; a += 200) {
+      quad(a, a + 120, -clw / 2, clw / 2, _markingColor);
+    }
+
+    if (drawNums) {
+      _paintRunwayIdent(canvas, rw.ident, nearNum0, nearNum1, w, cam, project);
+      _paintRunwayIdent(canvas, rw.farIdent, farNum1, farNum0, w, cam, project);
+    }
+  }
+
+  /// Paint [ident] on the pavement. [alongBottom] is the threshold side of
+  /// the digits (bottom), [alongTop] the far side (top), so the number reads
+  /// correctly on that approach.
+  void _paintRunwayIdent(
+    Canvas canvas,
+    String ident,
+    double alongBottom,
+    double alongTop,
+    double runwayW,
+    _P3 Function(double, double, [double?]) cam,
+    Offset Function(_P3) project,
+  ) {
+    if (ident.isEmpty) return;
+    paintText.text = TextSpan(
+      text: ident,
+      style: TextStyle(
+        color: _markingColor,
+        fontWeight: FontWeight.w900,
+        fontSize: 120,
+        height: 1.0,
+        letterSpacing: 6,
+      ),
+    );
+    paintText.layout();
+    final double tw = paintText.width;
+    final double th = paintText.height;
+    if (tw < 1 || th < 1) return;
+
+    final double hFt = (alongTop - alongBottom).abs();
+    double wFt = hFt * tw / th;
+    if (wFt > runwayW * 0.62) {
+      wFt = runwayW * 0.62;
+    }
+    final double half = wFt / 2;
+    final _P3 tl = cam(alongTop, -half);
+    final _P3 tr = cam(alongTop, half);
+    final _P3 bl = cam(alongBottom, -half);
+    if (tl.z < _zNear || tr.z < _zNear || bl.z < _zNear) return;
+
+    final Offset ptl = project(tl);
+    final Offset ptr = project(tr);
+    final Offset pbl = project(bl);
+    canvas.save();
+    canvas.transform((Matrix4.identity()
+          ..setEntry(0, 0, (ptr.dx - ptl.dx) / tw)
+          ..setEntry(1, 0, (ptr.dy - ptl.dy) / tw)
+          ..setEntry(0, 1, (pbl.dx - ptl.dx) / th)
+          ..setEntry(1, 1, (pbl.dy - ptl.dy) / th)
+          ..setEntry(0, 3, ptl.dx)
+          ..setEntry(1, 3, ptl.dy))
+        .storage);
+    paintText.paint(canvas, Offset.zero);
+    canvas.restore();
+  }
+
+  /// Signed distance of [p] from each frustum plane; >= 0 is inside.
+  static double _planeDist(int plane, _P3 p) {
+    switch (plane) {
+      case 0: return p.z - _zNear;
+      case 1: return p.z * _frustumK + p.x;
+      case 2: return p.z * _frustumK - p.x;
+      case 3: return p.z * _frustumK + p.y;
+      default: return p.z * _frustumK - p.y;
+    }
+  }
+
+  /// Sutherland–Hodgman polygon clip against the view frustum.
+  static List<_P3> _clipPolygon(List<_P3> input) {
+    List<_P3> out = input;
+    for (int plane = 0; plane < 5 && out.isNotEmpty; plane++) {
+      final List<_P3> inPts = out;
+      out = [];
+      for (int i = 0; i < inPts.length; i++) {
+        final _P3 a = inPts[i];
+        final _P3 b = inPts[(i + 1) % inPts.length];
+        final double da = _planeDist(plane, a);
+        final double db = _planeDist(plane, b);
+        if (da >= 0) out.add(a);
+        if ((da >= 0) != (db >= 0)) {
+          out.add(_P3.lerp(a, b, da / (da - db)));
+        }
+      }
+    }
+    return out;
+  }
+
+  /// Clip a segment against the view frustum; null if fully outside.
+  static List<_P3>? _clipSegment(_P3 a, _P3 b) {
+    double t0 = 0, t1 = 1;
+    for (int plane = 0; plane < 5; plane++) {
+      final double da = _planeDist(plane, a);
+      final double db = _planeDist(plane, b);
+      if (da < 0 && db < 0) return null;
+      if (da >= 0 && db >= 0) continue;
+      final double t = da / (da - db);
+      if (da < 0) {
+        t0 = max(t0, t);
+      } else {
+        t1 = min(t1, t);
+      }
+      if (t0 > t1) return null;
+    }
+    return [_P3.lerp(a, b, t0), _P3.lerp(a, b, t1)];
+  }
+}
+
+class _P3 {
+  final double x;
+  final double y;
+  final double z;
+  const _P3(this.x, this.y, this.z);
+
+  static _P3 lerp(_P3 a, _P3 b, double t) =>
+      _P3(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t);
 }
 
 class PfdData {
+  /// AHRS data older than this is treated as absent.
+  static const int ahrsStaleMs = 5000;
+
   double roll = 0;
   double pitch = 0;
   double yaw = 0;
@@ -647,8 +1139,161 @@ class PfdData {
   double altitude = 0;
   double altitudeChange = 0;
   double vsi = 0;
-  double cdi = 0;
+  /// Preferred CDI (dots, ±5). Null until a source publishes one.
+  double? cdi;
+  /// GPS-derived CDI used when [cdi] has been unset for [ahrsStaleMs].
+  double gpsCdi = 0;
   double turnTrend = 0;
   double to = 0;
+  /// Manual OBS course in degrees magnetic. Null follows GPS/route course.
+  double? obs;
   double vdi = 0;
+
+  /// Wall clock (ms) of the last ADS-B AHRS pitch/roll and heading samples.
+  int lastAttitudeMs = 0;
+  int lastHeadingMs = 0;
+  /// Wall clock (ms) of the last preferred CDI publish.
+  int lastCdiMs = 0;
+
+  /// Runway end chosen for the synthetic-vision background, or null.
+  PfdRunwayEnd? runway;
+
+  /// Elevation-tile heightmap for the synthetic-vision ground, or null.
+  PfdTerrain? terrain;
+
+  bool get ahrsAttitudeLive =>
+      DateTime.now().millisecondsSinceEpoch - lastAttitudeMs < ahrsStaleMs;
+  bool get ahrsHeadingLive =>
+      DateTime.now().millisecondsSinceEpoch - lastHeadingMs < ahrsStaleMs;
+  bool get cdiLive =>
+      cdi != null &&
+      DateTime.now().millisecondsSinceEpoch - lastCdiMs < ahrsStaleMs;
+
+  /// Needle value: preferred [cdi] while live, otherwise the GPS calculation.
+  double get displayedCdi {
+    final double value = cdiLive ? cdi! : gpsCdi;
+    if (value > 5) {
+      return 5;
+    }
+    if (value < -5) {
+      return -5;
+    }
+    return value;
+  }
+
+  void setCdi(double value) {
+    cdi = value;
+    lastCdiMs = DateTime.now().millisecondsSinceEpoch;
+  }
+}
+
+/// Heightmap sampled from elevation tiles. [elevFt] is row-major
+/// (index = row * cols + col). Null elevation means no tile at that point.
+class PfdTerrain {
+  final List<LatLng> pts;
+  final List<double?> elevFt;
+  final int cols;
+  final int rows;
+
+  const PfdTerrain({
+    required this.pts,
+    required this.elevFt,
+    required this.cols,
+    required this.rows,
+  });
+
+  /// Same red test as the map Elevation layer (elev ≥ altitude − 500 ft).
+  static bool isRed(double elevFt, double altFt) =>
+      ElevationImageProvider.isRed(elevFt, altFt);
+}
+
+/// PFD panel with hold-to-turn OBS knobs left of the CDI compass.
+class PfdView extends StatefulWidget {
+  final double width;
+  final double height;
+
+  const PfdView({super.key, required this.width, required this.height});
+
+  @override
+  State<PfdView> createState() => _PfdViewState();
+}
+
+class _PfdViewState extends State<PfdView> {
+  static const Duration _doubleTap = Duration(milliseconds: 350);
+  static const double _doubleTapSlop = 36;
+
+  Timer? _obsHold;
+  DateTime? _lastTapAt;
+  Offset? _lastTapPos;
+  late final Listenable _repaint;
+
+  @override
+  void initState() {
+    super.initState();
+    _repaint = Listenable.merge([Storage().timeChange, Storage().pfdChange]);
+  }
+
+  @override
+  void dispose() {
+    _obsHold?.cancel();
+    super.dispose();
+  }
+
+  void _nudge(int dir) {
+    Cdi.nudgeObs(dir.toDouble());
+  }
+
+  void _startHold(int dir) {
+    _nudge(dir);
+    _obsHold?.cancel();
+    _obsHold = Timer(const Duration(milliseconds: 320), () {
+      _obsHold = Timer.periodic(const Duration(milliseconds: 40), (_) {
+        _nudge(dir);
+      });
+    });
+  }
+
+  void _stopHold() {
+    _obsHold?.cancel();
+    _obsHold = null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerDown: (PointerDownEvent e) {
+        final Offset local = e.localPosition;
+        final PfdObsKnob? knob =
+            PfdPainter.hitObsKnob(local, widget.width, widget.height);
+        if (knob == null) {
+          return;
+        }
+        final DateTime now = DateTime.now();
+        if (_lastTapAt != null &&
+            now.difference(_lastTapAt!) <= _doubleTap &&
+            _lastTapPos != null &&
+            (local - _lastTapPos!).distance <= _doubleTapSlop) {
+          _lastTapAt = null;
+          _lastTapPos = null;
+          _stopHold();
+          Cdi.setObs(null);
+          return;
+        }
+        _lastTapAt = now;
+        _lastTapPos = local;
+        _startHold(knob == PfdObsKnob.cw ? 1 : -1);
+      },
+      onPointerUp: (_) => _stopHold(),
+      onPointerCancel: (_) => _stopHold(),
+      child: CustomPaint(
+        size: Size(widget.width, widget.height),
+        painter: PfdPainter(
+          height: widget.height,
+          width: widget.width,
+          repaint: _repaint,
+        ),
+      ),
+    );
+  }
 }

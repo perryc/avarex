@@ -13,11 +13,103 @@ This manual documents all features in the current AvareX app, including:
 
 ---
 
+## AvareX Releases
+
+**0.0.134**
+
+- Open the PFD from `Menu`.
+- Show an Apps4Av message when you open the app. Tap `OK`.
+
+**0.0.133**
+
+- Open 3D Class B, C, D, and SUA from the destination `3D` tab.
+- Shelf labels such as `25-43` (`SF` is surface).
+- Airspace above 10,000 ft is cut open.
+- Vector Map labels such as `SF-50`. Zoomed out, Class B is drawn first.
+- Menu `3D` adds terrain and ADS-B dots.
+- Menu `Cloud` is `Internet`.
+- 3D draws the plan at its altitude.
+- 3D draws the glide ring, and TFR or Game TFR when on.
+- Ownship pulses once a second.
+- 3D chips hide B, C, D, SUA, terrain, TFR, Game TFR, the plan, or obstacles.
+
+**0.0.132**
+
+- Draw a holding pattern from the Hold button beside a fix or navaid name on the Main tab. A dialog sets the inbound course, turn direction, and a 1.5, 2, 3, or 4 NM leg.
+- A map profile saves whichever items are checked: layers, weather, traffic volume, instruments, plan, plate, chart type, aircraft, and checklist. Applying the profile restores those items.
+
+**0.0.131**
+
+- Draw Elevation terrain in 3D behind the PFD horizon.
+- Draw the lined-up runway in 3D on the PFD within 10 NM.
+- Hold the PFD OBS knobs to set a course; the Nav course line and CDI follow, and a double-tap returns to the GPS course.
+- Coast ownship after the last GPS fix until the No GPS lock warning, then freeze.
+
+**0.0.130**
+
+- Fixed ETA and ETE to use live ground speed.
+
+**0.0.129**
+
+- Update Flight Intelligence to Gemini 3.8 Flash with Google Search.
+
+**0.0.128**
+
+- Add Van's RV-9A to built-in aircraft performance.
+- Translate one NOTAM from the destination NOTAM tab.
+- Delete a map profile from its three-dot menu.
+- Applying a map profile keeps the current chart, north up, and audible alerts.
+- Bug fixes.
+
+**0.0.127**
+
+- Save and apply named map profiles from Map Settings.
+- Show RP under the runway number for right traffic.
+- Translate a single NOTAM with Flight Intelligence from the NOTAM tab.
+- Bug fixes.
+
+**0.0.126**
+
+- Fetch airport NOTAMs from the FAA production NOTAM service.
+- Bug fixes.
+
+**0.0.125**
+
+- Update the Terms of Use and require a new signature.
+- After signing updated terms, skip setup if onboarding was already finished.
+- Bug fixes.
+
+**0.0.124**
+
+- Bug fixes.
+
+**0.0.123**
+
+- Bug fixes.
+
+**0.0.122**
+
+- Bug fixes.
+
+**0.0.121**
+
+- Bug fixes.
+
+**0.0.120**
+
+- Enable Cloud features on Windows and macOS.
+- Fix Plan waypoint reorder so drops land on the intended index.
+- Fix sign-in.
+- Rearrange weather, traffic, and nav buttons.
+- Bug fixes.
+
+---
+
 ## 1) Before You Start
 
 ### 1.1 Safety and intended use
 
-AvareX displays an in-app Terms of Use during onboarding that states this is **not an FAA-certified GPS** and must not be relied on as a sole safety-critical system.
+AvareX displays an in-app Terms of Use during onboarding. You must **Sign** before you can continue. The terms state that AvareX is **not an FAA-certified GPS** or approved navigation, weather, traffic, terrain, or flight-planning system; that you must assume the software and its data will fail or be wrong; that **you as pilot in command** are solely responsible for the flight; and that **Apps4Av Inc.** and the people who write, publish, or distribute the software have no liability for its use. The same screen includes the account privacy notice.
 
 ### 1.2 Internet and GPS requirements
 
@@ -33,19 +125,20 @@ AvareX displays an in-app Terms of Use during onboarding that states this is **n
 
 ### 1.3 First-run onboarding checklist
 
-On first run, complete onboarding pages:
+On first run, complete onboarding pages (titles match the screens):
 
-1. **Sign Terms of Use** (required to continue).
-2. Select **Day/Night theme**.
-3. Select units:
-   - Maritime (NM/knots/feet)
-   - Imperial (SM/MPH/feet)
-4. Confirm GPS permissions/settings.
-5. When you reach the **Databases and Maps** page, AvareX **automatically** downloads what is missing for your current GPS region — the **DatabasesX** package plus the region's **Sectional**, **Plates**, and **CSUP** — in one blocking step. Nothing to tap. (Use **Choose Manually** to open the full Download screen if you want to pick specific data.)
-6. Optional: open **Download** later to add more chart regions (IFR, TAC, Helicopter, etc.).
-7. Optional: register your 1800wxbrief.com email for FAA flight-plan workflows.
+1. **Sign the Terms of Use** (required to continue; swipe is blocked until you sign).
+2. **Welcome to AvareX!**:
+   - **Display Theme**: `Night` / `Day`
+   - **Measurement Units**: `NM / Knots` (Maritime) or `SM / MPH` (Imperial)
+3. **Internet and GPS**: confirm GPS permissions (`GPS Permissions`) and note that GPS can come from the device or an external ADS-B/GPS stream.
+4. **Databases and Maps**: AvareX **automatically** downloads what is missing for your current GPS region — the **DatabasesX** package plus the region's **Sectional**, **Plates**, and **CSUP** — in one blocking step. Nothing to tap. Use **Choose Manually** to open the full `Download` screen if you want to pick specific data.
+5. **Keep Warnings in Check**: when the red warning icon appears, tap it for troubleshooting.
+6. **Optimize Performance**: turn off unused map layers (layers icon on the MAP screen) for best performance.
+7. **File Flight Plans** (optional): enter the same email you use at 1800wxbrief.com to register for FAA flight-plan workflows.
+8. **Join the Community**: Apps4Av forum at `https://groups.google.com/g/apps4av-forum`.
 
-You can reopen onboarding later from the drawer header icon.
+You can reopen onboarding later from the drawer header icon (`Show intro screens`).
 
 ---
 
@@ -58,10 +151,13 @@ You can reopen onboarding later from the drawer header icon.
 | Vector map layer with airspace                                                                   | All supported platforms |
 | CAP Grid layer                                                                                   | All supported platforms |
 | Bluetooth IO screen                                                                              | **Android only** |
+| Device Link (one device shares the plan with the others over Wi-Fi)                             | Not available on web |
 | Plan Transfer to/from Avidyne IFD (Wi-Fi)                                                        | All supported platforms |
 | Avidyne IFD ADS-B traffic & weather (Capstone GDL90 over Wi-Fi)                                  | All supported platforms |
-| Pro Services (Flight Intelligence + Backup/Sync + Community + Aircraft Scheduler )               | **iOS and Android only** |
-| Airport Businesses & Reviews (free, sign-in required)                                            | **iOS and Android only** |
+| Flight Intelligence (Pro)                                                                        | **iOS and Android only** |
+| Internet drawer section (Account, Backup/Sync, Community, Aircraft Scheduler)                    | **iOS, Android, Windows, and macOS** |
+| Apps4Av message when the app opens                                                               | **iOS, Android, Windows, and macOS** |
+| Airport Businesses & Reviews (free, sign-in required)                                            | **iOS, Android, Windows, and macOS** |
 | PDF viewing in Documents/Help                                                                    | Not available on Linux |
 | File sharing from Documents/Logbook export                                                       | Not available on Linux |
 
@@ -84,15 +180,18 @@ After onboarding, the app opens to `MainScreen` with:
 
 ### 3.2 Drawer menu entries
 
-Open from MAP with **Menu** button (bottom-left):
+Open from MAP with **Menu** button (bottom-left). Items are grouped by section headers:
 
-- Download
-- Documents
-- Aircraft & Performance
-- Check Lists
-- Log Book
-- IO (Android only)
-- Help (opens User Manual PDF; not available on Linux)
+- **DATA**: `Download` (Charts & databases), `Documents` (Weather, manuals, notes, tracks)
+- **FLIGHT**: `Write a Note`, `3D`, `PFD`, `Check Lists`, `Aircraft & Performance`
+- **RECORDS**: `Log Book`
+- **INTERNET** (iOS/Android/Windows/macOS): `Account` (Sign in, profile, sign out), `Backup/Sync`, `Community` (unread notifications bell), `Scheduler`, and `Flight Intelligence` (iOS/Android only; Pro)
+- **CONNECTIVITY**: `Link` (share the active plan with other AvareX devices on the same Wi-Fi). `IO` (Android only; Bluetooth & connections)
+- **SUPPORT**: `Help` (User manual PDF; not available on Linux)
+
+`3D`, under `Write a Note`, opens the same airspace view as the destination popup, centered on the aircraft, without the yellow long-press mark. Downloaded Elevation tiles are drawn as terrain (brown, and red within 500 ft of altitude). ADS-B traffic inside 25 NM is drawn as dots. The active plan is drawn at its altitude. The glide ring, and `TFR` and `Game TFR` volumes when those layers are on, are drawn here too. See Section 9.8.
+
+`PFD`, under `3D`, opens the same Primary Flight Display as the map `PFD` layer, on its own screen. The map layer is unchanged. See Section 9.9.
 
 ![Drawer menu opened from MAP](assets/docs/screenshots/04_drawer_menu.png)
 
@@ -106,7 +205,7 @@ Tap bottom tab **MAP**.
 
 ![MAP tab with sectional chart, ownship, instrument strip, and bottom controls](assets/docs/screenshots/01_map_tab.png)
 
-The **instrument tiles** float as a movable overlay over the map (GS, ALT, MT, PRV, NXT, DIS, BRG, GEL, ETA, ETE, VSR, UPT…); each tile can be dragged anywhere and its position is remembered. Bottom-left is **Menu** (drawer); bottom-center is **Center**; bottom-right has **Mute, Ruler, Track-up toggle, Rubber-banding, Notes, Chart Type, Layers**, plus the warning icon top-right.
+The **instrument tiles** float as a movable overlay over the map (GS, ALT, MT, PRV, NXT, DIS, BRG, GEL, ETA, ETE, VSR, UPT…); each tile can be dragged anywhere and its position is remembered. All map controls sit on a single bottom row: **Menu** (drawer) at the left, **Center** in the middle, and **Map Settings, Chart Type, Layers** at the right, plus the warning icon top-right.
 
 ### 4.2 Core interactions
 
@@ -120,7 +219,7 @@ The **instrument tiles** float as a movable overlay over the map (GS, ALT, MT, P
 ### 4.3 Map controls (buttons and menus)
 
 #### Top-right
-- **Pro icon** (iOS/Android): opens Pro Services login/paywall flow.
+- **Pro icon** (iOS/Android): opens `Flight Intelligence` when you are signed in, or the `Account` sign-in screen if you are not. Manage the account from `MAP → Menu → Internet → Account`.
 - **Red warning icon** (if active): opens troubleshooting drawer.
 
 #### Bottom center
@@ -132,27 +231,39 @@ The **instrument tiles** float as a movable overlay over the map (GS, ALT, MT, P
 - **Menu** button: opens drawer list (Download, Documents, etc.)
 
 #### Bottom-right control row (scrollable)
-- **Mute** (volume icon): toggle audible alerts (traffic, GPWS, runway awareness) on/off.
-- **Ruler** (compass icon): toggle measure mode; long-press map to add points. Red when active.
-- **North-up / Track-up toggle**: switches orientation mode.
-- **Rubber banding toggle**: enables dragging route waypoints directly on map. Red when active.
-- **Notes icon**: opens handwriting Notes screen.
+- **Map Settings popup** (gear icon): opens the `Map Settings` list described below.
 - **Chart type popup**: selects chart source type.
 - **Layers popup**: per-layer on/off via opacity slider.
+
+#### Map Settings popup
+Tap the gear icon in the bottom-right control row to open the `Map Settings` list. Each label shows that setting's current state, and active settings are highlighted. Tap the close (X) icon or outside the popup to dismiss it.
+
+- **Measure Distance On / Measure Distance Off**: toggles measure mode; long-press map to add points.
+- **Rubber Banding On / Rubber Banding Off**: toggles dragging route waypoints directly on map.
+- **Audible Alerts On / Audible Alerts Off**: toggles audible alerts (traffic, GPWS, runway awareness).
+- **North Up / Track Up**: shows the current orientation mode; tap to switch.
+- **Profiles**: tap the `Profiles` heading to open the Profile screen, where a name can be saved and a profile deleted. Saved profiles are listed under the heading by name. Tap a name to apply the items that were checked for that profile.
 
 #### Top-left
 - **Instrument tiles menu** (arrow dropdown): tile sizing, lock/reset layout, and show/hide individual instrument tiles (including the `ADSB` tile).
 
-#### Traffic-only controls (show when Traffic layer > 0)
-- **Traffic puck size** cycles: `S`, `M`, `L`
-  - S: 20 aircraft, 3000 ft, 10 NM
-  - M: 200 aircraft, 6000 ft, 50 NM
-  - L: 1000 aircraft, 30000 ft, 500 NM
+#### Nav sub-layers (in the Layers popup)
+- With the **Nav** layer above 0%, **Obstacles**, **Tape**, **Circles**, and **CAP Grid** appear indented under it, each with its own opacity slider.
+- Each one's effective opacity is its own slider multiplied by the **Nav** slider, so turning **Nav** off hides the route and all four.
+
+#### Weather products (in the Layers popup)
+- With the **Weather** layer above 0%, the weather products appear indented under it, each with its own opacity slider. Enable any combination of **ADS-B Radar**, **ADS-B Cloud Tops**, **ADS-B Icing**, **ADS-B Turbulence**, **ADS-B Lightning**, **Radar**, **Ceiling**, and **Wind Vectors**. ADS-B items show an antenna icon; Radar, Ceiling, and Wind Vectors show an internet/radar icon. **Radar** is internet Mesonet radar animation.
+- Each product's effective opacity is its own slider multiplied by the **Weather** layer slider, so turning **Weather** down dims all products.
+
+#### Traffic volume (in the Layers popup)
+- With the **Traffic** layer above 0%, a **Volume** row appears indented under it with three choices:
+  - `S`: 20 aircraft, 3000 ft, 10 NM
+  - `M`: 200 aircraft, 6000 ft, 50 NM
+  - `L`: 1000 aircraft, 30000 ft, 500 NM
 
 #### Altitude slider (right side)
-- Appears with the **Weather** layer when the product menu is set to Cloud tops, Icing, Turbulence, Ceiling, or Wind vectors.
+- Appears with the **Weather** layer when a product needing an altitude is on: Cloud tops, Icing, Turbulence, Ceiling, or Wind vectors.
 - Range: 0 to 30,000 ft (1,000 ft increments).
-- Product menu: with the **Weather** layer on, tap the cloud button on the right (above the traffic **S/M/L** control, below the altitude slider when shown) to open per-product opacity controls (same pattern as map layers). Enable any combination of **ADS-B Radar**, **ADS-B Cloud Tops**, **ADS-B Icing**, **ADS-B Turbulence**, **ADS-B Lightning**, **Radar**, **Ceiling**, and **Wind Vectors**. ADS-B items show an antenna icon; Radar, Ceiling, and Wind Vectors show an internet/radar icon. **Radar** is internet Mesonet radar animation.
 
 ### 4.4 Map chart types
 
@@ -176,21 +287,22 @@ Layer list from settings (with per-layer opacity 0-100%):
 
 | Layer | Description |
 |-------|-------------|
-| **Nav** | Route lines (cyan=passed, purple=current, gray=next), runway depiction, waypoint markers/labels, ownship symbol, wind barb, north indicator. |
-| **Circles** | Range rings (10/5/2 NM black rings), speed ring (blue, 1-minute travel distance), glide circle (purple, power-off glide range) + labels. The 10 NM ring carries a magnetic compass rose with ticks every 5° and labels at `N`, `NE`, `E`, `SE`, `S`, `SW`, `W`, `NW`. |
+| **Nav** | Route lines (cyan=passed, purple=current, gray=next), runway depiction, waypoint markers/labels, ownship symbol, wind barb, north indicator. **Obstacles**, **Tape**, **Circles**, and **CAP Grid** are listed under **Nav** in this popup, each with its own opacity slider. |
+| **Circles** (under Nav) | Range rings (10/5/2 NM black rings), speed ring (blue with a yellow halo, 1-minute travel distance), glide circle (white with an orange halo, power-off glide range at the selected aircraft's best glide speed) + labels. The 10 NM ring carries a magnetic compass rose with ticks and labels at the eight major points: `N`, `NE`, `E`, `SE`, `S`, `SW`, `W`, `NW`. |
 | **Chart** | Downloaded FAA chart tiles (offline chart base). |
-| **Vector Map** | NASR vector tiles from MBTiles files, with Class B/C/D airspace and SUA (MOA, Restricted, Warning, Alert, Prohibited, NSA) rendered with standard aviation colors. |
-| **CAP Grid** | Civil Air Patrol grid overlay with grid identifiers (e.g., BOS42, SEA123). Only visible at zoom level 9+. |
+| **Vector Map** | NASR vector tiles from MBTiles files, with Class B/C/D airspace and SUA (MOA, Restricted, Warning, Alert, Prohibited, NSA) rendered with standard aviation colors. Zoomed out, only Class B is drawn. MOAs, restricted areas, and warning areas appear next, then Class C. Class D, smaller special-use areas, and each sector altitude (`25-43`, `05` is 500 ft, `SF` is the surface) appear up close. The airport name, such as `KMHT`, is at the center. |
+| **CAP Grid** (under Nav) | Civil Air Patrol grid overlay with grid identifiers (e.g., BOS42, SEA123). Only visible at zoom level 9+. |
 | **Topo** | USGS topo online base map (max zoom 16). |
 | **Elevation** | Downloaded elevation tiles with color-coded terrain. |
-| **Weather** | METAR/TAF/PIREP/AIRMET/SIGMET symbols plus selectable weather products (multiple at once) from the right-side **Weather** menu: ADS-B Radar, ADS-B Cloud Tops, ADS-B Icing, ADS-B Turbulence, ADS-B Lightning, Radar (internet), Ceiling, and Wind Vectors — each with its own opacity slider like map layers. Use the altitude slider when tops/icing/turbulence/ceiling/winds are on. |
+| **Weather** | METAR/TAF/PIREP/AIRMET/SIGMET symbols plus selectable weather products (multiple at once) listed under **Weather** in this popup: ADS-B Radar, ADS-B Cloud Tops, ADS-B Icing, ADS-B Turbulence, ADS-B Lightning, Radar (internet), Ceiling, and Wind Vectors — each with its own opacity slider like map layers. Use the altitude slider when tops/icing/turbulence/ceiling/winds are on. |
 | **TFR** | Temporary flight restriction shapes/markers with time validity. Red=active, orange=future. |
+| **Game TFR** | Stadium / motor speedway TFRs (14 CFR 99.7): orange 3 NM rings and a stadium marker at NFL, MLB, NCAA Division I football, and major speedway venues. Applies when the event is in progress, SFC–3000 ft AGL. Tap a marker for the venue name. |
 | **Plate** | Georeferenced plate overlay on map (when loaded). |
 | **Traffic** | Avare-style simple traffic dots with a 1-minute projection line drawn in the direction of travel. Cyan circle (with black outline) for normal/proximate traffic, red circle (with black outline) for threat traffic (advisory or resolution alert). Each dot is annotated with the relative flight-level offset, vertical trend arrow, and callsign. Integrates with audible alerts. |
-| **Obstacles** | Obstacle markers (red squares) in your vicinity. |
-| **Tape** | Distance tape labels from ownship upward in NM. |
+| **Obstacles** (under Nav) | Obstacle markers (red squares) in your vicinity. |
+| **Tape** (under Nav) | Distance tape labels from ownship upward in NM. |
 | **GeoJSON** | Imported user GeoJSON polygons/markers. |
-| **PFD** | Inset Primary Flight Display panel (artificial horizon, speed/altitude tapes, VSI, compass, CDI/VDI, AOA indicator, turn coordinator). Requires AHRS data. |
+| **PFD** | Inset Primary Flight Display panel (artificial horizon, speed/altitude tapes, VSI, compass, CDI/VDI, AOA indicator, turn coordinator). Requires AHRS data. Downloaded Elevation tiles are drawn in 3D behind the horizon (brown ground, red within 500 ft of altitude like the map Elevation layer). Within 10 NM of a runway you are lined up with, the runway is drawn in 3D on top of that terrain (pavement, edges, displaced threshold arrows and bar, threshold stripes, 1000-ft aiming point markers, centerline dashes, runway numbers). |
 | **Tracks** | Ownship breadcrumb/polyline track recording (green line). |
 
 ![Map Layers popup — adjust opacity sliders for each layer](assets/docs/screenshots/02_map_layers_popup.png)
@@ -198,7 +310,9 @@ Layer list from settings (with per-layer opacity 0-100%):
 Notes:
 
 - Turning **Tracks** layer OFF saves a KML track file into Documents/tracks and clears active track recording.
-- **PFD** requires AHRS data from GDL90-compatible devices to show attitude.
+- **PFD** requires AHRS data from GDL90-compatible devices to show attitude. Two black **OBS** knobs sit on the bottom of the PFD under the speed and altitude tapes (white rings, circular arrows). Hold the right knob to turn the selected course clockwise, or the left knob counterclockwise (the course box and CDI needle follow; the knobs turn white). The brown plane-to-destination line on the **Nav** map layer rotates with that course through a full 360° and runs from the waypoint toward an aircraft flying inbound (it does not extend past the waypoint). Double-tap either knob to return to the GPS/route course. OBS clears when the active waypoint changes.
+- The **PFD** synthetic runway is picked automatically from the closest airport (or the plan's active airport waypoint): the runway end whose heading is within 45° of your track, with you inside 35° of its extended centerline, up to 10 NM out. It is positioned from GPS position and altitude and the runway's database coordinates, elevation, and displaced threshold. With live AHRS it moves with pitch, roll, and heading exactly like the horizon line; without AHRS it is drawn level along the GPS track. It is an aid, not a substitute for an approved approach.
+- **PFD** terrain uses the same Elevation tiles as the map. Ground is the usual brown; terrain is red when it is within 500 ft of your altitude or higher — the same red threshold as the map Elevation layer. Sky stays blue. Download Elevation charts or the mesh is omitted and the brown ground remains. It is an aid, not a TAWS.
 
 ### 4.6 Instrument overlay (movable tiles)
 
@@ -274,7 +388,7 @@ The callout fires when all of these hold:
 
 A takeoff or landing roll — aligned on a runway above 15 knots — suppresses the alert, so rolling through an intersecting runway stays quiet. Once the flight phase is Airborne there is no crossing callout. Each runway announces once per approach and re-arms after you are clear of it.
 
-Alerts share the global **Mute** control with traffic and GPWS. This is an advisory aid only, not a substitute for ATC clearances or looking outside.
+Alerts share the global **Audible Alerts** control (`MAP → Map Settings`) with traffic and GPWS. This is an advisory aid only, not a substitute for ATC clearances or looking outside.
 
 ### 4.8 Weather marker interactions
 
@@ -283,17 +397,18 @@ Alerts share the global **Mute** control with traffic and GPWS. This is an advis
 - **PIREP tap**: Shows pilot report
 - **AIRMET/SIGMET tap**: Shows advisory text. **Long-press**: toggles shape visibility on map
 - **TFR tap**: Shows TFR details (altitudes, times)
+- **Game TFR tap**: Shows venue name and `Game TFR (3 NM, SFC-3000' AGL when active)`
 
 ### 4.9 Ruler/measurement tool
 
-- Activate via compass icon (turns red when active)
+- Activate via `Measure Distance Off` in the `Map Settings` popup (the row reads `Measure Distance On` and is highlighted when active)
 - Long-press map to add measurement points
 - Shows distance (NM) and bearing (degrees) between points
 - Multiple segments supported
 
 ### 4.10 Rubber banding
 
-- Activate via toggle button (turns red when active)
+- Activate via `Rubber Banding Off` in the `Map Settings` popup (the row reads `Rubber Banding On` and is highlighted when active)
 - Long-press and drag waypoint icons to reposition
 - On release, snaps to nearest navaid/fix from database
 - Must be explicitly enabled to prevent accidental edits
@@ -318,12 +433,13 @@ Alerts share the global **Mute** control with traffic and GPWS. This is an advis
 
 Possible tabs:
 
-- **Main**: destination summary (airport info, runway diagram, or VOR/navaid info with nearby VORs)
+- **Main**: destination summary (airport info, runway diagram, or VOR/navaid info with nearby VORs). Each runway end is a circle (green is best for the current wind). Right traffic shows `RP` under the runway number; left traffic has no pattern mark. For a fix or navaid, the name and type (such as `YREPPOINT, GPS`) has **Hold** beside it. That opens a dialog for a holding pattern at this fix: inbound course, **Right** (standard) or **Left** turns, and a straight-leg length of **1.5**, **2**, **3**, or **4 NM** (default 4). **Draw on Map** draws a standard-rate racetrack; the turns use your ground speed (90 kt if you are slower than 60). Arrows on the two turns show the direction of flight. An orange dot on the fix is the entry point. Parallel and teardrop draw that entry from the fix, with arrows along it for the direction of travel. **Clear hold** removes it. One hold at a time.
 - **AD**: airport diagram/runway depiction (interactive viewer with zoom)
 - **METAR**: METAR + TAF text with flight category color indicator
-- **NOTAM**: fetched NOTAM list (downloaded async)
+- **NOTAM**: fetched NOTAM list from the FAA production NOTAM service (downloaded async). On iOS/Android, each NOTAM has a **Translate** icon that opens `Flight Intelligence` with only that NOTAM, asking for a plain-English translation (Pro).
 - **SUA**: special-use airspace data for the area
 - **Wind**: nearest winds-aloft station data at multiple altitudes
+- **3D**: Class B, C, and D shelves, plus restricted, warning, prohibited, and MOA areas, within 25 NM of this place, from the Vector Map database. Drag to rotate, pinch to zoom, and drag with two fingers to pan. Class colors match the Vector Map (B blue, C magenta, D light blue). Restricted areas are red, warning areas are brown, prohibited areas are purple, and MOAs are olive. Each shelf is labeled with its altitude range, for example `25-43`. An airport with surface airspace is marked with a flat circle on the ground and its name, such as `KMHT`. Areas without an airport, such as `R-4101A SF-25`, keep the name on the shelf and have no circle. Altitudes are hundreds of feet MSL (`25-43` is 2500–4300; `05` is 500; `SF` is the surface; `UNL` is unlimited). Anything above 10,000 ft is cut there so a tall area does not cover the airport. The cut is an open dashed top with a fading outline and upward marks, and the label still shows the real ceiling (`R-5203 SF-500`). Obstacles from the main database are red lines from the ground to the obstacle top. A yellow line marks the long-press point. The ownship is a larger white dot with a black ring that pulses once a second, so it is not a traffic dot, and it moves with the aircraft while it is inside this 25 NM area. The active plan is drawn at its altitude: cyan for the part already flown, purple for the current leg, and grey ahead, matching the map. The glide ring is a white circle with an orange halo on the surface, and an orange cone from the aircraft down to that circle. When the `TFR` layer is on, areas in effect are red volumes and later ones are brown. When `Game TFR` is on, each venue is an orange cylinder 3 NM across, from the surface to 3000 ft above the ground. Chips along the bottom show or hide Class `B`, `C`, and `D`, `SUA` (restricted, warning, prohibited, and MOA), terrain, `TFR`, `Game TFR`, the plan, and obstacles. **Reset** restores the view. If Vector Map is not downloaded, the page says so.
 - **ST**: sounding chart/image for the area (Skew-T diagram)
 - **Business**: for airports, lists the crowd-sourced businesses/FBOs for that airport inline (free; sign-in required) with details and reviews shown in place — see Section 11.7
 
@@ -338,13 +454,13 @@ If nearby alternatives exist, a horizontal "Nearby" selector appears.
 - Bottom tab **PLATE**, or
 - From destination popup using **Plates**
 
-![PLATE tab — selectors for airport (bottom-right) and plate (bottom-left)](assets/docs/screenshots/31_plate_tab.png)
+![PLATE tab at KBVY — airport diagram on screen, airport selector bottom-right, plate selector bottom-left](assets/docs/screenshots/31_plate_tab.png)
 
 ### 6.2 What it does
 
 - Displays downloaded plates/diagrams/CSUP
 - Draws ownship and heading on georeferenced plates
-- Can overlay a selected business marker on airport diagrams (from the crowd-sourced Airport Businesses directory; iOS/Android, sign-in required)
+- Can overlay a selected business marker on airport diagrams (from the crowd-sourced Airport Businesses directory; iOS/Android/Windows/macOS, sign-in required)
 - Supports zoom/pan via InteractiveViewer (up to 8x)
 
 ### 6.3 Controls
@@ -402,7 +518,7 @@ On airport diagrams, when businesses with a known location exist for the airport
 - Select a business from the crowd-sourced Airport Businesses directory
 - See its location marked on the airport diagram, with its name labeled next to the marker
 
-The businesses come from the shared Firestore directory (see Section 11.7), so this selector appears only on iOS/Android and when you are signed in.
+The businesses come from the shared Firestore directory (see Section 11.7), so this selector appears only on iOS/Android/Windows/macOS and when you are signed in.
 
 ### 6.7 Automatic behavior on landing
 
@@ -427,6 +543,7 @@ After waypoints are added (e.g. `KBOS BOS CMK KHPN`), each row shows distance/gr
 - Reorderable waypoint list (long-press and drag to reorder)
 - Swipe row right-to-left to delete waypoint
 - Tap row to set current waypoint (highlighted in purple with "ACTIVE" badge)
+- When this device is a **Slave** in `Link`, the plan and the active waypoint follow the master. Edits made on the slave are replaced by the master's next update.
 - **Insert waypoint**: tap a waypoint to select it, then press the **+** button to insert a new waypoint after that position (opens FIND tab; next selection inserts after the selected waypoint)
 - Long press (grab) a waypoint to move it up and down
 - Header row shows plan-wide calculated totals (Distance, Ground Speed, Course, Time, Fuel)
@@ -746,7 +863,7 @@ A unified screen with tabs for managing aircraft profiles, performance calculati
 #### Aircraft Selection
 
 Use the dropdown at the top to select from:
-- **Built-in aircraft**: C152, C172S, C182T, PA-28-181, PA-28-161, PA-44, Beech A36, Cirrus SR22, Diamond DA40
+- **Built-in aircraft**: C152, C172S, C182T, PA-28-181, PA-28-161, PA-44, Beech A36, Cirrus SR22, Diamond DA40, Van's RV-9A
 - **My Aircraft profiles**: User-created profiles saved in your database (same list as in **My Aircraft** tab)
 
 #### Takeoff Tab
@@ -757,13 +874,15 @@ Enter conditions to calculate takeoff performance:
 - **Pressure Altitude** (ft)
 - **Temperature** (°C)
 - **Weight** (lbs)
-- **Headwind** (kts, negative for tailwind)
+- **Headwind** (negative for tailwind)
 
 Results show:
-- Ground Roll distance (ft)
-- Distance to clear 50ft obstacle (ft)
+- Ground Roll
+- Distance to clear 50ft obstacle
 - Density altitude (ft) — computed as pressure altitude plus 120 × (OAT − ISA temperature), with ISA 15°C at sea level and −2°C per 1000 ft pressure altitude
 - Soft field adjustments (if configured)
+
+Speed and distance values follow the app unit setting (onboarding) and are shown without unit suffixes.
 
 #### Landing Tab
 
@@ -774,13 +893,15 @@ Enter conditions to calculate landing performance:
 - **Pressure Altitude** (ft)
 - **Temperature** (°C)
 - **Weight** (lbs)
-- **Headwind** (kts, negative for tailwind)
+- **Headwind** (negative for tailwind)
 
 Results show:
-- Ground Roll distance (ft)
-- Distance to clear 50ft obstacle (ft)
+- Ground Roll
+- Distance to clear 50ft obstacle
 - Density altitude (ft) — same formula as takeoff (OAT vs ISA at that pressure altitude)
 - Soft field adjustments (if configured)
+
+Speed and distance values follow the app unit setting and are shown without unit suffixes.
 
 #### Cruise Tab
 
@@ -794,8 +915,11 @@ Enter cruise conditions:
 Below altitude and temperature deviation, the screen shows **density altitude** (ft) for those inputs (read-only).
 
 Results show:
-- True Airspeed (KTAS)
+- True Airspeed
 - Fuel Flow (GPH)
+- Range (with 45 min reserve)
+
+Speed and range follow the app unit setting and are shown without unit suffixes.
 
 #### W&B Tab
 
@@ -847,6 +971,11 @@ Create and manage your saved aircraft profiles:
 - Cruise Speed, Fuel Endurance
 - Other Information
 
+**Glide circle (MAP `Circles` layer):**
+- **Best Glide Speed** — POH best-glide speed of the **selected** aircraft (Performance dropdown). Used instead of current GPS ground speed. Entered in the same speed units as the rest of the app (onboarding unit setting).
+- **Sink Rate** (fpm) — power-off sink rate at best glide
+- If Best Glide Speed is empty, Cruise Speed is used; if that is also empty, 65 is assumed.
+
 **Performance Data:**
 - Max Gross Weight, Usable Fuel, Empty Weight
 - Takeoff/Landing correction factors (headwind %, tailwind %, soft field %)
@@ -871,6 +1000,17 @@ Open: **Menu → Check Lists**
 - Swipe delete to remove checklist
 - Info tooltip explaining import format
 - Persistent state during session
+
+### 9.4.1 Profile
+
+Open: **MAP → Map Settings → Profiles**
+
+Each checkbox stores the current value with the profile. **Layers**, **Weather**, **Traffic volume**, and **Instruments** start checked. **Plan**, **Plate**, **Chart Type**, **Aircraft**, and **Checklist** start unchecked. Applying the profile restores the checked items. The value in use is shown under each checkbox.
+
+- **Profile name**: text box for the profile name
+- **Save**: stores the checked items under that name. Saving an existing name replaces it.
+- **Profile list**: tap the three-dot menu on a profile and choose **Delete** to remove it. A profile shows the items it will restore under its name.
+- Apply a saved profile from the same `Profiles` list in `MAP → Map Settings` by tapping its name. That list shows the profile name. The `Profiles` heading opens this screen.
 
 ### 9.5 Log Book
 
@@ -945,13 +1085,57 @@ Open: **Menu → Help**
 - Opens the User Manual PDF for in-app reference.
 - Available on platforms that support PDF viewing (not Linux).
 
+### 9.8 3D
+
+Open: **Menu → 3D** (under `Write a Note`)
+
+![3D screen — airspace around the aircraft, terrain from downloaded Elevation, and ADS-B traffic dots](assets/docs/screenshots/33_airspace_3d.png)
+
+Same view as the destination popup `3D` tab, centered on the aircraft, without the yellow long-press mark.
+
+- **Terrain**: downloaded Elevation tiles, brown, and red within 500 ft of altitude
+- **Traffic**: ADS-B targets inside 25 NM, drawn as dots
+- **Plan**: the active plan at its altitude, cyan behind, purple on the current leg, and grey ahead
+- **Glide ring**: the map glide circle on the surface, and a cone from the aircraft down to it
+- **TFR**: when the `TFR` layer is on, red if in effect and brown if later, from the published floor to the published ceiling
+- **Game TFR**: when that layer is on, an orange 3 NM cylinder from the surface to 3000 ft above the ground
+- **Filters**: `B`, `C`, `D`, `SUA`, `TFR`, `Game`, `Plan`, `Obstacles`, and `Terrain` show or hide those parts. `SUA` is restricted, warning, prohibited, and MOA. `TFR` and `Game` still follow the map layers
+- **Drag** to rotate, **pinch** to zoom, **two fingers** to pan
+- **Reset** restores the view
+- Shelf colors, altitude labels, obstacles, and the ownship dot match the destination `3D` tab (Section 5.3)
+
+### 9.9 PFD
+
+Open: **Menu → PFD** (under `3D`)
+
+The same `PFD` drawn by the map layer, sized to this screen. The map `PFD` layer is unchanged.
+
+- Attitude, speed and altitude tapes, VSI, compass, CDI/VDI, AOA, and turn coordinator
+- Hold the **OBS** knobs to set a course; double-tap either knob to return to the GPS course (Section 4)
+- Elevation terrain and the lined-up runway are drawn the same way as on the map `PFD`
+
+### 9.10 Link
+
+Open: **Menu → Link** (under `Connectivity`). Not available on web.
+
+Shares the active flight plan with other phones and tablets running AvareX on the same Wi-Fi. One device is the **Master**. The others are **Slave** and copy the master's plan, including which waypoint is active.
+
+- **Off**: this device does not announce itself and does not follow a plan. Master, Slave, and Off are remembered after the app restarts.
+- **Master**: sends this device's plan only when it changes. That includes a waypoint added, removed, or reordered, and a change of the active waypoint (including the fix inside an airway or procedure). Discovery still goes out about every 10 seconds.
+- **Slave**: copies the master's plan and sets the same active waypoint. Edits made on a slave are replaced when the master sends the next update.
+- **Name**: the name other devices show for this one.
+- **Devices**: this device, and every other AvareX device heard in the last minute, with its role and address. Masters and slaves announce about every 10 seconds. Off does not. A device leaves the list after a minute with no message.
+- **Messages**: debug log of the JSON going back and forth. **TX** is this device, **RX** is another. Tap a row to read the JSON. **Pause** freezes the log. **Clear** empties it. The antenna icon announces immediately.
+- Every device must be on the same Wi-Fi. On iOS, allow **Local Network** for AvareX. On Windows, allow AvareX on private networks if the firewall asks.
+- Use one master. If two devices are master, slaves follow whichever plan arrives last, and `Link` shows a warning.
+
 ---
 
 ## 10) Notes Screen
 
 ### 10.1 How to access
 
-On MAP tab, tap the notes/pen (transcribe) icon in bottom-right controls.
+On MAP tab, open **Menu** (bottom-left) and tap `Write a Note` under the `Flight` section.
 
 ![Notes screen — blank canvas with color picker, broom-eraser, dialpad, undo/redo, eraser, and save (disk) icons](assets/docs/screenshots/16_notes_screen.png)
 
@@ -1014,23 +1198,34 @@ Tap the dialpad icon in the toolbar to display an on-screen keypad:
 
 ---
 
-## 11) Pro Services (iOS/Android only)
+## 11) Account and Cloud Features
 
 ### 11.1 Access
 
-From MAP top-right account icon, or by routed requests from some features (e.g., translate actions).
+Cloud features (Backup/Sync, Community, Scheduler, Airport Businesses) run on **iOS, Android, Windows, and macOS**. Flight Intelligence runs on **iOS and Android** only. Cloud features are not available on Linux or Snap.
+
+They are reached from:
+
+- **Account screen** — `MAP → Menu → Internet → Account`. Sign in, view profile, sign out, or delete the account. The screen title is `Account`. After you **Sign out** (or delete the account), the same `Account` screen switches to the sign-in form — you are not sent back to the map.
+- **Pro icon** (iOS/Android) — `MAP top-right account icon`. Opens `Flight Intelligence` when signed in (paywall if needed), or the `Account` sign-in screen if not. Some features also route here on demand (e.g., translate actions).
+- **`INTERNET` drawer section** — `MAP → Menu → Internet`. Holds `Account`, `Backup/Sync`, `Community`, `Scheduler`, and `Flight Intelligence`. `Account`, `Backup/Sync`, `Community`, and `Scheduler` are free (sign-in only). `Flight Intelligence` still uses the Pro paywall.
 
 ### 11.2 Login and subscription flow
 
-- Sign in/register with email authentication (Firebase)
-- Paywall handled through RevenueCat entitlement (`Pro`)
-- After login, bottom sheet shows available Pro features
+- Sign in/register with email authentication (Firebase) on the `Account` screen
+- While signed in, `Account` shows your profile (avatar, display name, sign-in methods), **Sign out**, and **Delete account**
+- After sign-out, `Account` shows the sign-in form again (same route, title still `Account`)
+- Cloud features (`Backup/Sync`, `Community`, `Scheduler`, Airport Businesses) need a signed-in account only — they are free on iOS, Android, Windows, and macOS
+- `Flight Intelligence` uses the RevenueCat entitlement (`Pro`) paywall
+- After login, open `Flight Intelligence` from the MAP top-right account icon or from `MAP → Menu → Internet → Flight Intelligence`
 
 ### 11.3 Flight Intelligence (AI)
 
 Screen title: **Flight Intelligence**
 
-Powered by Gemini 2.5 Pro with Google Search integration.
+**Access**: `MAP → Menu → Internet → Flight Intelligence`, or `MAP top-right account icon` (opens `Flight Intelligence` when signed in, or `Account` sign-in if not)
+
+Powered by Gemini 3.8 Flash with Google Search integration.
 
 Capabilities:
 
@@ -1050,6 +1245,7 @@ Capabilities:
 - Response appears in text box with disclaimer
 - History drawer (clock icon): view previous questions/answers, choose question, show answer, delete history item
 - **Clear (X)** button clears text box
+- **NOTAM translate**: on the destination popup `NOTAM` tab, tap the **Translate** icon on a NOTAM to open this screen with a plain-English translation question for that NOTAM
 
 **Disclaimer**: Responses are generated by an AI model and may not be accurate or reliable. Do not use when life, health, property are at stake.
 
@@ -1057,7 +1253,9 @@ Capabilities:
 
 Screen title: **Pilot Community**
 
-A pilot-only social network backed by Firebase. Pilots can build a public profile, create groups, and join existing ones. **Private** groups require owner approval; **public** groups are open to all signed-in Pro users.
+**Access**: `MAP → Menu → Internet → Community`
+
+A pilot-only social network backed by Firebase. Pilots can build a public profile, create groups, and join existing ones. **Private** groups require owner approval; **public** groups are open to all signed-in users. This is a free Cloud feature (sign-in required, no Pro subscription).
 
 **Disclaimer** (shown as a strip at the top of the screen and via the info icon in the app bar):
 
@@ -1100,10 +1298,10 @@ A pilot-only social network backed by Firebase. Pilots can build a public profil
 
 **Visibility rules**:
 
-- Public groups are discoverable and any signed-in Pro user can read the feed.
+- Public groups are discoverable and any signed-in user can read the feed.
 - Private groups are discoverable by name but the feed is hidden from non-members. Owners get a red badge over the **Members** tab when pending requests exist.
 
-**Notifications**: in-app only (no push). A **bell icon** appears both in the `Pilot Community` app bar and above the `Community` button on the Pro Services screen; it shows an unread count and opens the **Notifications** screen. You are notified when:
+**Notifications**: in-app only (no push). A **bell icon** appears both in the `Pilot Community` app bar and on the `Community` row in the drawer's `INTERNET` section; it shows an unread count and opens the **Notifications** screen. You are notified when:
 
 - someone **replies to a topic you started**, or
 - someone **replies to any post in a group you own**.
@@ -1113,6 +1311,10 @@ On the Notifications screen, unread items are shown in **bold** with a dot. You 
 ### 11.5 Aircraft Scheduler
 
 Screen title: **Aircraft Scheduler**
+
+**Access**: `MAP → Menu → Internet → Scheduler`
+
+This is a free Cloud feature (sign-in required, no Pro subscription).
 
 A shared booking calendar and club dispatch board for flying clubs, partnerships, and flight schools, backed by Firebase. It works like the Pilot Community: an owner creates a scheduler, members request to join, and members reserve the resources the owner adds. **All schedulers are private** — they are discoverable by name, but the owner approves every member, and the schedule and roster are hidden from non-members.
 
@@ -1175,6 +1377,10 @@ Limits are enforced when a member books; exceeding a limit shows an explanatory 
 
 Screen title: **Backup/Sync**
 
+**Access**: `MAP → Menu → Internet → Backup/Sync`
+
+This is a free Cloud feature (sign-in required, no Pro subscription).
+
 Cloud operations for `user.db` using Firebase Storage:
 
 - **Backup** (upload icon): upload local database to cloud storage
@@ -1192,9 +1398,8 @@ Business names are pre-seeded from the app's built-in business database;
 everything else is contributed by signed-in pilots.
 
 **This is a free feature** — it is **not** part of a Pro subscription. It only
-requires a signed-in account (the same account used for Pro Services) so that
-contributions are accountable rather than anonymous. It is available on iOS and
-Android, where cloud accounts are supported.
+requires a signed-in account (the same Cloud `Account`) so that
+contributions are accountable rather than anonymous. It is available on iOS, Android, Windows, and macOS.
 
 **Access**: destination popup → `Business` tab. When you are signed in, the
 airport's businesses are listed **directly inside the tab** — there is no
@@ -1248,6 +1453,14 @@ of the usual confirmation).
 from the built-in business database) can be pinned on the `PLATE` airport
 diagram using its business selector — see Section 6.6.
 
+### 11.8 Messages from Apps4Av
+
+On iOS, Android, Windows, and macOS, AvareX checks for a message from Apps4Av when you open the app and again when you bring it back to the foreground. If one is waiting, a popup shows its title and text. No account is required. These messages are separate from the Community reply notifications in Section 11.4.
+
+- **OK**: dismisses the message on this device. It stays dismissed until Apps4Av publishes a new message or updates that one.
+- A web address, when the message includes one, appears under the text. Select it to copy.
+- Nothing appears when there is no current message. A message that has already expired is not shown.
+
 ---
 
 ## 12) Warnings and Troubleshooting Drawer
@@ -1270,7 +1483,7 @@ If AvareX shows ownship moving but no traffic, no FIS-B weather, and no external
 
 Fix: `Settings → Privacy & Security → Local Network → AvareX → ON`, then force-quit and relaunch AvareX. See FAQ-16 for full details.
 
-This is the most common cause of "AvareX traffic doesn't work" on iPhone/iPad and only affects iOS, not Android.
+This is the most common cause of "AvareX traffic doesn't work" on iPhone/iPad and only affects iOS, not Android. The same permission is required for `Link` (other AvareX devices on UDP `49090`).
 
 ---
 
@@ -1282,6 +1495,7 @@ This is the most common cause of "AvareX traffic doesn't work" on iPhone/iPad an
   - **Auto**: Prefers external GPS when available, falls back to internal after 30s timeout. Shows `Internal-A` or `External-A`.
   - **Internal**: Uses only internal GPS, discards external GPS data. Shows `Internal` with green background.
   - **External**: Uses only external GPS, discards internal GPS data. Shows `External` with blue background.
+- After the last GPS, ADS-B, or NMEA fix, ownship heading, speed, altitude, and position keep coasting until the **No GPS lock** warning (60 seconds with no fix from either source) so the aircraft symbol does not jump or spin at rest or during a brief signal loss. When that warning appears, coasting stops and ownship freezes.
 - Flight status tracks taxi/airborne transitions and accumulates flight time.
 - External autopilot/NMEA sentence output is generated continuously while app is running and IO connection exists.
 - Track recording continues while Tracks layer is enabled; saves to KML when layer is turned off.
@@ -1302,46 +1516,58 @@ This is the most common cause of "AvareX traffic doesn't work" on iPhone/iPad an
 | File FAA plan | `PLAN → Brief & File` |
 | Manage filed plans | `PLAN → Manage` |
 | Load reversed plan | `PLAN → Load & Save → 3-dot menu → Load Reversed` |
-| Create IFR preferred route | `PLAN → Create → Create IFR Preferred Route` |
+| Create IFR preferred route | `PLAN → Create → Create IFR Route` |
 | Show recent ATC routes | `PLAN → Create → Show IFR ATC Routes` |
 | Send plan to / get plan from Avidyne IFD (Wi-Fi) | `PLAN → Transfer` |
 | Destination details | Long-press on map or tap FIND result |
+| 3D Class B/C/D, restricted, warning, prohibited, and MOA airspace, plus obstacles | Destination popup `3D` tab (after `Wind`, before `ST`) |
+| 3D airspace around the aircraft, with terrain and ADS-B traffic | `MAP → Menu → 3D` (under `Write a Note`) |
+| PFD on its own screen | `MAP → Menu → PFD` (under `3D`) |
+| Draw a holding pattern | Long-press a fix or navaid → `Main` → `Hold` → `Draw on Map` |
 | Show plates for airport | Destination popup `Plates` or `PLATE tab` |
 | Get airport satellite view | `PLATE tab → Plate selector → APS-AERIAL VIEW (Get)` |
 | Delete airport satellite view | `PLATE tab → Plate selector → APS-AERIAL VIEW → trash icon` |
 | Configure aircraft | `MAP → Menu → Aircraft & Performance → My Aircraft tab` |
+| Set best glide / sink rate | `MAP → Menu → Aircraft & Performance → My Aircraft tab` (Best Glide Speed, Sink Rate) |
 | Change aircraft map icon | `MAP → Menu → Aircraft & Performance → My Aircraft tab → icon dropdown` |
 | Checklist operations | `MAP → Menu → Check Lists` |
+| Save map settings as a profile | `MAP → Map Settings → Profiles` |
+| Apply a saved profile | `MAP → Map Settings → Profiles` |
 | Weight and balance | `MAP → Menu → Aircraft & Performance → W&B tab` |
 | Takeoff performance | `MAP → Menu → Aircraft & Performance → Takeoff tab` (fixed-wing icon only; hidden for helicopter) |
 | Landing performance | `MAP → Menu → Aircraft & Performance → Landing tab` (fixed-wing icon only; hidden for helicopter) |
 | Cruise performance | `MAP → Menu → Aircraft & Performance → Cruise tab` (fixed-wing icon only; hidden for helicopter) |
-| Runway crossing alert | Automatic when Mute is off; uses closest-airport runways |
+| Runway crossing alert | Automatic when `Audible Alerts` is on; uses closest-airport runways |
 | Fuel burn in plan | `PLAN tab` — set **GPH** manually or use the aircraft icon to load from performance data |
 | Logbook + dashboard | `MAP → Menu → Log Book` |
 | Logbook statistics | `MAP → Menu → Log Book → Details` |
 | Currency status | `MAP → Menu → Log Book → Details` (currency card) |
 | Bluetooth pairing/connection | `MAP → Menu → IO` (Android) |
+| Share the plan with other AvareX devices | `MAP → Menu → Link` |
 | Check ADS-B receiver status | `MAP → ADSB instrument tile` (movable; tap opens ADS-B Status screen) |
 | Enable Stratus 3 Open ADS-B Mode | `MAP → ADSB instrument tile → antenna icon (top-right)` |
-| Notes/drawing | `MAP → Notes icon` |
-| Notes with aviation sheet | `MAP → Notes icon → sheet icon → select template` |
-| Notes number keypad | `MAP → Notes icon → dialpad icon` |
-| Pro AI | `MAP top-right account icon → Flight Intelligence` |
-| Pro Community | `MAP top-right account icon → Community` |
-| Create a pilot group | `MAP top-right account icon → Community → New Group` |
-| Join a public group | `MAP top-right account icon → Community → Discover → tap group → Join` |
+| Notes/drawing | `MAP → Menu → Write a Note` |
+| Notes with aviation sheet | `MAP → Menu → Write a Note → sheet icon → select template` |
+| Notes number keypad | `MAP → Menu → Write a Note → dialpad icon` |
+| Pro AI | `MAP → Menu → Internet → Flight Intelligence` or `MAP top-right account icon` (iOS/Android) |
+| Translate a NOTAM (Pro) | `Destination popup → NOTAM → Translate icon` on a NOTAM (iOS/Android) |
+| Cloud account | `MAP → Menu → Internet → Account` (iOS/Android/Windows/macOS) |
+| Sign out / delete account | `MAP → Menu → Internet → Account` → **Sign out** or **Delete account** (returns to the sign-in form on the same `Account` screen) |
+| Community | `MAP → Menu → Internet → Community` |
+| Create a pilot group | `MAP → Menu → Internet → Community → New Group` |
+| Join a public group | `MAP → Menu → Internet → Community → Discover → tap group → Join` |
 | Approve pending members (owner) | `Community → group → Members tab → Approve / Reject` |
-| Edit your pilot profile | `MAP top-right account icon → Community → Profile → edit icon` |
+| Edit your pilot profile | `MAP → Menu → Internet → Community → Profile → edit icon` |
 | Post a photo to a group | `Community → group → Post → Photo → choose source` |
 | Share your current flight plan | `Community → group → Post → Attach plan` |
 | Load a shared flight plan into PLAN | `Community → group → tap Load on a post with a route` |
 | Reply to a topic | `Community → group → tap topic → Reply` |
 | View a topic's discussion thread | `Community → group → tap a topic in the Feed` |
-| View notifications | `Community → bell icon` (also shown on the bell above the `Community` button on the Pro Services screen) |
+| Apps4Av message | Shown automatically when you open the app (iOS, Android, Windows, macOS). Tap `OK` |
+| View notifications | `Community → bell icon` (also shown on the `Community` row in the drawer's `INTERNET` section) |
 | Turn reply notifications off / mute a group | `Community → bell icon → gear icon` |
-| Aircraft Scheduler | `MAP top-right account icon → Scheduler` |
-| Create a scheduler (private) | `MAP top-right account icon → Scheduler → New Scheduler` |
+| Aircraft Scheduler | `MAP → Menu → Internet → Scheduler` |
+| Create a scheduler (private) | `MAP → Menu → Internet → Scheduler → New Scheduler` |
 | Add an aircraft/instructor (owner) | `Scheduler → scheduler → Schedule tab → Add resource` |
 | Book a resource | `Scheduler → scheduler → Schedule tab → tap a green slot → Book` |
 | View / cancel my reservations | `Scheduler → scheduler → Mine tab` |
@@ -1358,14 +1584,20 @@ This is the most common cause of "AvareX traffic doesn't work" on iPhone/iPad an
 | Add services/fuel/hours to a business | `Business tab → tap listing → Edit details` |
 | Set fuel prices for a business | `Business tab → tap listing → Set fuel prices` |
 | Review an airport business | `Business tab → tap listing → Reviews → Add` |
-| Cloud backup/restore | `MAP top-right account icon → Backup/Sync` |
+| Cloud backup/restore | `MAP → Menu → Internet → Backup/Sync` |
 | User Manual (Help) | `MAP → Menu → Help` |
-| CAP Grid overlay | `MAP → Layers → CAP Grid slider > 0` (zoom to level 9+) |
-| Enable wind vectors | `MAP → Layers → Weather > 0` → product menu **Wind** (use altitude slider) |
-| Enable ceiling overlay | `MAP → Layers → Weather > 0` → product menu **Ceil** (use altitude slider) |
+| PFD terrain and synthetic runway | `MAP → Layers → PFD > 0` (Elevation charts for terrain; runway when lined up within 10 NM) |
+| Set an OBS course | `MAP → PFD → hold an OBS knob` (double-tap either knob to return to the GPS course) |
+| Enable Game TFR overlay | `MAP → Layers → Game TFR slider > 0` |
+| CAP Grid overlay | `MAP → Layers → Nav > 0 → CAP Grid slider > 0` (zoom to level 9+) |
+| Enable wind vectors | `MAP → Layers → Weather > 0 → Wind Vectors > 0` (use altitude slider) |
+| Enable ceiling overlay | `MAP → Layers → Weather > 0 → Ceiling > 0` (use altitude slider) |
+| Change traffic volume (S/M/L) | `MAP → Layers → Traffic > 0 → Volume` |
 | Change GPS source mode | Tap `SRC` tile in instrument overlay |
-| Measure distances | `MAP → Ruler icon → long-press map to add points` |
-| Rubber band waypoints | `MAP → Rubber banding icon → long-press and drag waypoints` |
+| Measure distances | `MAP → Map Settings → Measure Distance Off → long-press map to add points` |
+| Rubber band waypoints | `MAP → Map Settings → Rubber Banding Off → long-press and drag waypoints` |
+| Mute audible alerts | `MAP → Map Settings → Audible Alerts On` (label flips to `Audible Alerts Off`) |
+| North-up / track-up orientation | `MAP → Map Settings → North Up / Track Up` |
 | Insert waypoint at position | `PLAN → long-press waypoint row → FIND → select destination` |
 | View winds & terrain analysis | `PLAN → analytics icon → tap diagram for details` |
 
@@ -1437,7 +1669,7 @@ Use this to adjust waypoints graphically.
 
 1. Ensure your route has waypoints (`PLAN` tab or destination popup `+Plan`).
 2. Go to `MAP`.
-3. Tap the **rubber banding** icon (decision arrow) to enable it (icon turns red).
+3. Tap the **gear** icon in the bottom-right controls, then tap `Rubber Banding Off` to enable it (the row changes to `Rubber Banding On` and is highlighted).
 4. Long-press a waypoint marker or label and drag to a new position.
 5. Release to snap/update from database lookup and rebuild route geometry.
 6. Turn rubber banding off when done to avoid accidental edits.
@@ -1485,7 +1717,7 @@ Alternative add methods (used after the plan exists):
 1. Open `PLAN → Create`.
 2. In Route field:
    - Enter route text and use **Create As Entered**, or
-   - Enter `DEPART DEST` and use **Create IFR Preferred Route**, or
+   - Enter `DEPART DEST` and use **Create IFR Route**, or
    - Use **Show IFR ATC Routes** to view recent ATC route options.
 3. When route is loaded, return to `PLAN` to review/reorder waypoints.
 
@@ -1557,7 +1789,7 @@ Prereq: set your 1800wxbrief-compatible email in onboarding.
 
 ### UC-10b: Use aviation sheets for IFR clearance copydown
 
-1. On `MAP`, tap the notes/pen icon (in the bottom-right control row).
+1. On `MAP`, open **Menu** and tap `Write a Note` (under `Flight`).
 
 ![Step 2 — the Notes screen opens with a blank canvas](assets/docs/screenshots/16_notes_screen.png)
 
@@ -1592,16 +1824,15 @@ Exchange flight plans with a panel-mounted Avidyne IFD440/540/550 in either dire
 4. To **send**: build your route with at least 2 waypoints, then tap **Send** next to the IFD. Wait for the success toast, then **review and activate** the uploaded route on the IFD.
 5. To **get**: tap **Get** next to the IFD. AvareX downloads the IFD's flight plan and loads it into the active plan (replacing the current one). Matched waypoints keep their database type; unmatched ones become GPS coordinate points.
 
-### UC-13: Back up and restore app data (Pro)
+### UC-13: Back up and restore app data
 
-1. Open Pro Services from account icon on MAP (top-right).
-2. Sign in and pass entitlement/paywall if required.
-3. Open `Backup/Sync` (from bottom buttons after login).
-4. Use:
+1. Open `MAP → Menu → Internet → Backup/Sync`.
+2. Sign in if prompted; the `Backup/Sync` screen opens right after.
+3. Use:
    - **Backup** (upload icon) to upload local `user.db`
    - **Restore** (download icon) to overwrite local data from cloud copy
-5. Confirm prompts carefully (both operations overwrite existing data).
-6. Progress percentage shows during transfer.
+4. Confirm prompts carefully (both operations overwrite existing data).
+5. Progress percentage shows during transfer.
 
 ### UC-14: Get flight help from community resources
 
@@ -1617,7 +1848,7 @@ Exchange flight plans with a panel-mounted Avidyne IFD440/540/550 in either dire
 ### UC-15: Use the CAP Grid overlay for search and rescue
 
 1. Go to `MAP → Layers`.
-2. Set **CAP Grid** opacity > 0.
+2. Make sure **Nav** opacity > 0, then set **CAP Grid** opacity > 0 in the sub-list under **Nav**.
 3. Zoom to level 9 or higher (grid only renders at sufficient zoom).
 4. Grid squares appear with identifiers (e.g., BOS42, SEA123).
 5. Use grid coordinates for communication with ground teams or other aircraft.
@@ -1676,6 +1907,7 @@ The **FIND** tab is the fastest way to locate any airport, navaid, fix, or proce
 5. From the destination popup you can:
    - **→D** Direct-To this destination
    - **+Plan** insert into the current plan after the active waypoint
+   - **Hold** beside the name and type on the Main tab of a fix or navaid opens the holding-pattern dialog
    - **↓Plan** append to the end of the plan
    - **Plates** (airports) jump to PLATE tab at this airport
 
@@ -1683,11 +1915,11 @@ The **FIND** tab is the fastest way to locate any airport, navaid, fix, or proce
 
 ### UC-19: Measure distance and bearing on the map
 
-1. On `MAP`, tap the **Ruler** icon (compass) to enable measure mode (turns red).
+1. On `MAP`, tap the gear icon, then tap `Measure Distance Off` to enable measure mode (the row changes to `Measure Distance On` and is highlighted).
 2. Long-press on the map to place your first point.
 3. Long-press again to add additional points.
 4. Distance (NM) and bearing (degrees) are shown between points.
-5. Tap the Ruler icon again to disable and clear measurements.
+5. Tap `Measure Distance On` to disable and clear measurements.
 
 ### UC-20: Insert a waypoint at a specific position in your plan
 
@@ -1770,7 +2002,7 @@ The navigation log gives you per-leg headings, magnetic variation, wind correcti
    - **Pressure Altitude** (ft)
    - **Temperature** (°C)
    - **Takeoff Weight** (lbs)
-   - **Headwind** (kts, use a negative value for a tailwind)
+   - **Headwind** (use a negative value for a tailwind)
 5. View calculated **Ground Roll**, **Over 50ft Obstacle**, and **Density Altitude** distances at the top of the screen.
 6. Switch to the **L/D** tab and repeat for landing performance.
 
@@ -1796,23 +2028,22 @@ The navigation log gives you per-leg headings, magnetic variation, wind correcti
 8. For custom aircraft, use **Edit** to modify envelope points and station definitions.
 9. If your aircraft uses the **helicopter** map icon, check the lateral CG chart and lateral columns as well; all four CG checks must pass for a green status.
 
-### UC-24: Create a pilot community group (Pro)
+### UC-24: Create a pilot community group
 
-1. Open Pro Services from the account icon on MAP (top-right).
-2. Sign in and pass the entitlement/paywall if required.
-3. Tap **Community** in the Pro bottom sheet.
-4. Tap the **New Group** floating action button.
-5. Fill in:
+1. Open `MAP → Menu → Internet → Community`.
+2. Sign in if prompted.
+3. Tap the **New Group** floating action button.
+4. Fill in:
    - **Group name** (3–60 characters)
    - **Description** (optional, up to 280 characters)
    - **Home airport** (optional ICAO, e.g. `KBED`)
-6. Choose **Visibility**:
+5. Choose **Visibility**:
    - **Public** — anyone can join immediately.
    - **Private** — discoverable by name, but you approve every new member.
-7. Tap **Create Group**. You land on the new group's **Feed** tab as the owner.
-8. Tap **Post** to share your first message; optionally attach an airport ICAO to the post.
+6. Tap **Create Group**. You land on the new group's **Feed** tab as the owner.
+7. Tap **Post** to share your first message; optionally attach an airport ICAO to the post.
 
-### UC-25: Join a private pilot group (Pro)
+### UC-25: Join a private pilot group
 
 1. Open `Community → Discover` and search for the group by name.
 2. Tap the group to open it. Private groups show a lock icon and the feed is hidden.
@@ -1821,21 +2052,29 @@ The navigation log gives you per-leg headings, magnetic variation, wind correcti
 5. When approved, the **Feed** unlocks and you can post immediately. You can leave at any time with the **Leave** button.
 6. To cancel a pending request, tap **Requested** to withdraw it.
 
-### UC-26: Set up an aircraft scheduler and book a flight (Pro)
+### UC-26: Set up an aircraft scheduler and book a flight
 
-1. Open Pro Services from the account icon on MAP (top-right).
-2. Sign in and pass the entitlement/paywall if required.
-3. Tap **Scheduler** in the Pro bottom sheet.
-4. Tap the **New Scheduler** floating action button, fill in the name (and optional description/home airport), then tap **Create Scheduler**. Every scheduler is private; you land on the new scheduler as the owner.
-5. On the **Schedule** tab, tap **Add resource** to add your aircraft (e.g. `Cessna 172`, tail `N12345`) and any instructors. They appear as rows, with time across the top.
-6. (Optional) Tap the **tune** icon in the app bar to open **Booking Rules** and set how many reservations — and how many weekend reservations — each member may hold at once (0 = unlimited). The owner is exempt from these limits.
-7. Share the scheduler name with your members; they open `Scheduler → Discover`, search the name, and **Request to Join**. Approve them on the **Members** tab. Use the badge icon to set **Student** / **Instructor** / **Dispatcher** roles and assign students to instructors.
-8. On **Dispatch → Fleet**, tap an aircraft and **Update meters / MX** to set hobbs, tach, and inspection due dates for the shared fleet.
-9. (Optional) On **Dispatch → Lessons**, create a **lesson pack** of prepaid hours for a student.
-10. To book, a member taps a **green** slot on a resource row, picks a **start date/time** and **end date/time** (bookings can span multiple days, up to 14), optionally picks an instructor / lesson pack, then taps **Book**. The slot turns **blue**. Members can review their bookings on the **Mine** tab.
-11. If that time is already taken, the member is added to the **backup** queue. If the main reservation is later cancelled, the first backup is promoted automatically.
-12. To cancel, tap the reservation block (or use the **Mine** tab) and choose **Cancel**. Only the member who booked it or the owner can cancel a reservation.
-13. For discrepancies, use **Dispatch → Squawks → File squawk**. A **Grounding** squawk blocks booking and shows as GROUNDED on the fleet board. For a hard maintenance hold, turn off **Available for booking** from Schedule or Dispatch (owner/dispatcher).
+1. Open `MAP → Menu → Internet → Scheduler`.
+2. Sign in if prompted.
+3. Tap the **New Scheduler** floating action button, fill in the name (and optional description/home airport), then tap **Create Scheduler**. Every scheduler is private; you land on the new scheduler as the owner.
+4. On the **Schedule** tab, tap **Add resource** to add your aircraft (e.g. `Cessna 172`, tail `N12345`) and any instructors. They appear as rows, with time across the top.
+5. (Optional) Tap the **tune** icon in the app bar to open **Booking Rules** and set how many reservations — and how many weekend reservations — each member may hold at once (0 = unlimited). The owner is exempt from these limits.
+6. Share the scheduler name with your members; they open `Scheduler → Discover`, search the name, and **Request to Join**. Approve them on the **Members** tab. Use the badge icon to set **Student** / **Instructor** / **Dispatcher** roles and assign students to instructors.
+7. On **Dispatch → Fleet**, tap an aircraft and **Update meters / MX** to set hobbs, tach, and inspection due dates for the shared fleet.
+8. (Optional) On **Dispatch → Lessons**, create a **lesson pack** of prepaid hours for a student.
+9. To book, a member taps a **green** slot on a resource row, picks a **start date/time** and **end date/time** (bookings can span multiple days, up to 14), optionally picks an instructor / lesson pack, then taps **Book**. The slot turns **blue**. Members can review their bookings on the **Mine** tab.
+10. If that time is already taken, the member is added to the **backup** queue. If the main reservation is later cancelled, the first backup is promoted automatically.
+11. To cancel, tap the reservation block (or use the **Mine** tab) and choose **Cancel**. Only the member who booked it or the owner can cancel a reservation.
+12. For discrepancies, use **Dispatch → Squawks → File squawk**. A **Grounding** squawk blocks booking and shows as GROUNDED on the fleet board. For a hard maintenance hold, turn off **Available for booking** from Schedule or Dispatch (owner/dispatcher).
+
+### UC-27: Keep the same plan on a second phone or tablet
+
+1. Join every device to the same Wi-Fi network. On iOS, allow **Local Network** for AvareX.
+2. On the device that will be edited, open `MAP → Menu → Link` and tap **Master**.
+3. On each other device, open `Link` and tap **Slave**. They appear under **Devices**.
+4. Build or change the plan on the master, and tap the waypoint to fly. Each slave loads that plan and sets the same active waypoint, including the current fix on an airway or procedure.
+5. Open **Messages** on either device to see the JSON sent (**TX**) and received (**RX**). Tap a row to read it.
+6. Tap **Off** on a device to stop following, or to stop sending.
 
 ---
 
@@ -1880,7 +2119,7 @@ If the IFD has an ADS-B receiver, AvareX also picks up its **Capstone** ADS-B tr
 ### FAQ-03: Where do I enable new wind/ceiling map features?
 
 - `MAP → Layers → Weather` (opacity > 0)
-- Right-side product menu: choose **Wind** or **Ceil**
+- In the sub-list that appears under **Weather**, raise **Wind Vectors** or **Ceiling** above 0%
 - Use the altitude slider to change displayed altitude context
 - Source threads:
   - New features v83/v84:  
@@ -1900,16 +2139,16 @@ If the IFD has an ADS-B receiver, AvareX also picks up its **Capstone** ADS-B tr
 ### FAQ-05: Where are FBO/business details?
 
 - In the destination popup, open the **Business** tab (free; sign-in required). The airport's businesses are listed inline; tap one to view and contribute services, fuel, hours, and star reviews per airport (see Section 11.7).
-- On the `PLATE` screen, when an airport diagram is active, use the right-side business selector (business icon) to mark a business's location on the diagram. It draws from the same crowd-sourced directory (iOS/Android, sign-in required).
+- On the `PLATE` screen, when an airport diagram is active, use the right-side business selector (business icon) to mark a business's location on the diagram. It draws from the same crowd-sourced directory (iOS/Android/Windows/macOS, sign-in required).
 - Source thread:  
   `https://groups.google.com/g/apps4av-forum/c/oMOR-gaIqis`
 
 ### FAQ-06: What are the colored rings on map?
 
 - In the `Circles` layer:
-  - **Black rings**: fixed 2/5/10 NM reference rings; the 10 NM ring is marked with a magnetic compass rose (ticks every 5°, labels at `N` / `NE` / `E` / `SE` / `S` / `SW` / `W` / `NW`)
-  - **Blue ring**: speed-based 1-minute travel distance
-  - **Purple ring**: glide circle based on aircraft sink rate, winds aloft, terrain, and altitude
+  - **Black rings**: fixed 2/5/10 NM reference rings; the 10 NM ring is marked with a magnetic compass rose (ticks and labels at the eight major points: `N` / `NE` / `E` / `SE` / `S` / `SW` / `W` / `NW`)
+  - **Blue ring with a yellow halo**: speed-based 1-minute travel distance
+  - **White ring with an orange halo**: glide circle based on the selected aircraft's best glide speed and sink rate, plus winds aloft, terrain, and altitude. The same ring is drawn on the surface in the 3D view, with a cone from the aircraft down to it
 - Source thread:  
   `https://groups.google.com/g/apps4av-forum/c/VJ0S3ejWPC8`
 
@@ -1952,8 +2191,8 @@ If the IFD has an ADS-B receiver, AvareX also picks up its **Capstone** ADS-B tr
 ### FAQ-11: Is Flight Intelligence (AI) available on desktop?
 
 - Current Pro AI workflows are targeted for iOS/Android only.
-- Access from map account icon → Pro Services → Flight Intelligence.
-- Uses Gemini 2.5 Pro with Google Search integration.
+- Access from `MAP → Menu → Internet → Flight Intelligence` or the map account icon (opens Flight Intelligence when signed in, or Account sign-in if not).
+- Uses Gemini 3.8 Flash with Google Search integration.
 - Source threads:
   - AI feature thread:  
     `https://groups.google.com/g/apps4av-forum/c/wWZUn6TNG1w`
@@ -1971,7 +2210,7 @@ If the IFD has an ADS-B receiver, AvareX also picks up its **Capstone** ADS-B tr
 
 - Civil Air Patrol grid overlay for search and rescue operations.
 - Shows grid identifiers (e.g., BOS42, SEA123) at zoom level 9+.
-- Enable via `MAP → Layers → CAP Grid` opacity > 0.
+- Enable via `MAP → Layers → Nav` opacity > 0, then **CAP Grid** opacity > 0 in the sub-list under **Nav**.
 - Covers all US sectional chart areas.
 
 ### FAQ-14: How do I view my flight in 3D?
@@ -1994,7 +2233,7 @@ If the IFD has an ADS-B receiver, AvareX also picks up its **Capstone** ADS-B tr
 
 This is a Local Network permission issue, not a bug in your receiver or in AvareX's traffic engine.
 
-Since iOS 14, Apple silently blocks all incoming UDP broadcasts (including GDL90 traffic on UDP `4000`, ForeFlight on `43211`, and X-Plane on `49002`) until the user grants the **Local Network** permission. The internal phone GPS keeps working, so ownship still moves and the map looks correct — that's the trap. ADS-B traffic, ADS-B weather (NEXRAD/METAR/TAF/AIRMET/SIGMET via FIS-B), and external GPS lock from your receiver will all be missing.
+Since iOS 14, Apple silently blocks all incoming UDP broadcasts (including GDL90 traffic on UDP `4000`, ForeFlight on `43211`, X-Plane on `49002`, and AvareX Link on `49090`) until the user grants the **Local Network** permission. The internal phone GPS keeps working, so ownship still moves and the map looks correct — that's the trap. ADS-B traffic, ADS-B weather (NEXRAD/METAR/TAF/AIRMET/SIGMET via FIS-B), and external GPS lock from your receiver will all be missing.
 
 Fix:
 

@@ -7,17 +7,22 @@ class AircraftIconType {
 }
 
 class Aircraft {
+  /// Candidate tails for the **active** aircraft: Performance dropdown, then
+  /// the map / **My Aircraft** profile setting.
+  static List<String> _activeAircraftTails() {
+    return [
+      Storage().settings.getLastPerformanceAircraft().trim(),
+      Storage().settings.getAircraft().trim(),
+    ];
+  }
+
   /// Loads [Storage.imagePlane] from the **selected** aircraft when present in
   /// `user.db` (last Performance dropdown tail, then **My Aircraft** profile tail),
   /// otherwise from app setting `key-aircraft-icon`.
   static Future<void> reloadAircraftIcon() async {
     String iconType = Storage().settings.getAircraftIcon();
-    final List<String> tails = [
-      Storage().settings.getLastPerformanceAircraft().trim(),
-      Storage().settings.getAircraft().trim(),
-    ];
     final seen = <String>{};
-    for (final String tail in tails) {
+    for (final String tail in _activeAircraftTails()) {
       if (tail.isEmpty || !seen.add(tail)) {
         continue;
       }
@@ -33,6 +38,41 @@ class Aircraft {
     Storage().planeIconChange.value++;
   }
 
+  /// Aircraft used for map features such as the glide circle.
+  /// Performance dropdown first, then the map aircraft setting, then the
+  /// most recently saved profile.
+  static Future<Aircraft?> getActiveAircraft() async {
+    final seen = <String>{};
+    for (final String tail in _activeAircraftTails()) {
+      if (tail.isEmpty || !seen.add(tail)) {
+        continue;
+      }
+      try {
+        return await UserDatabaseHelper.db.getAircraft(tail);
+      } catch (_) {}
+    }
+    final List<Aircraft> all = await UserDatabaseHelper.db.getAllAircraft();
+    if (all.isEmpty) {
+      return null;
+    }
+    return all.first;
+  }
+
+  /// Best-glide speed in the app's current speed units. Prefers the dedicated
+  /// field, then cruise TAS, then a typical light-GA value so the glide ring
+  /// can still be drawn.
+  double get bestGlideSpeed {
+    final double? vg = double.tryParse(bestGlide);
+    if (vg != null && vg > 0) {
+      return vg;
+    }
+    final double? cruise = double.tryParse(cruiseTas);
+    if (cruise != null && cruise > 0) {
+      return cruise;
+    }
+    return 65.0;
+  }
+
   // Basic identification
   final String tail;
   final String type;
@@ -46,6 +86,7 @@ class Aircraft {
   final String pic;
   final String picInfo;
   final String sinkRate;
+  final String bestGlide;
   final String fuelBurn;
   final String base;
   final String other;
@@ -73,6 +114,7 @@ class Aircraft {
     required this.pic,
     required this.picInfo,
     required this.sinkRate,
+    this.bestGlide = '',
     required this.fuelBurn,
     required this.base,
     required this.other,
@@ -100,6 +142,7 @@ class Aircraft {
       pic: "",
       picInfo: "",
       sinkRate: "",
+      bestGlide: "",
       fuelBurn: "",
       base: "",
       other: "",
@@ -120,6 +163,7 @@ class Aircraft {
       pic: ((map['pic'] ?? '') as String).toUpperCase(),
       picInfo: ((map['picInfo'] ?? '') as String).toUpperCase(),
       sinkRate: ((map['sinkRate'] ?? '') as String).toUpperCase(),
+      bestGlide: ((map['bestGlide'] ?? '') as String).toUpperCase(),
       fuelBurn: ((map['fuelBurn'] ?? '') as String).toUpperCase(),
       base: ((map['base'] ?? '') as String).toUpperCase(),
       other: ((map['other'] ?? '') as String).toUpperCase(),
@@ -148,6 +192,7 @@ class Aircraft {
       'pic': pic.toUpperCase(),
       'picInfo': picInfo.toUpperCase(),
       'sinkRate': sinkRate.toUpperCase(),
+      'bestGlide': bestGlide.toUpperCase(),
       'fuelBurn': fuelBurn.toUpperCase(),
       'base': base.toUpperCase(),
       'other': other.toUpperCase(),
@@ -180,6 +225,7 @@ class Aircraft {
     String? pic,
     String? picInfo,
     String? sinkRate,
+    String? bestGlide,
     String? fuelBurn,
     String? base,
     String? other,
@@ -205,6 +251,7 @@ class Aircraft {
       pic: pic ?? this.pic,
       picInfo: picInfo ?? this.picInfo,
       sinkRate: sinkRate ?? this.sinkRate,
+      bestGlide: bestGlide ?? this.bestGlide,
       fuelBurn: fuelBurn ?? this.fuelBurn,
       base: base ?? this.base,
       other: other ?? this.other,

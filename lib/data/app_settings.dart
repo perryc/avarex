@@ -145,6 +145,10 @@ class AppSettings {
         "Nav,Circles,Chart,Topo,Vector Map,CAP Grid,Elevation,Weather,TFR,CA Airspace,CA Airports,Game TFR,Plate,Traffic,Obstacles,Tape,GeoJSON,PFD,Tracks") as String).split(",");
   }
 
+  void setLayers(List<String> layers) {
+    provider.setString("key-layers-v52", layers.join(","));
+  }
+
   List<double> getLayersOpacity() {
     return (provider.getValue("key-layers-opacity-v54", defaultValue:
         "1,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0") as String).split(",").map((String e) => double.parse(e)).toList();
@@ -245,11 +249,11 @@ class AppSettings {
   }
 
   bool isSigned() {
-    return provider.getValue("key-signed", defaultValue: false) as bool;
+    return provider.getValue("key-signed-v2", defaultValue: false) as bool;
   }
 
   void setSign(bool value) {
-    provider.setBool("key-signed", value);
+    provider.setBool("key-signed-v2", value);
   }
 
   String getTrafficPuckSize() {
@@ -261,11 +265,11 @@ class AppSettings {
   }
 
   bool showIntro() {
-    return provider.getValue("key-intro", defaultValue: true) as bool;
+    return provider.getValue("key-intro-v2", defaultValue: true) as bool;
   }
 
   void setIntro(bool value) {
-    provider.setBool("key-intro", value);
+    provider.setBool("key-intro-v2", value);
   }
 
   void setDocumentPage(String name) {
@@ -426,6 +430,39 @@ class AppSettings {
 
   void setWeatherProductsOpacity(List<double> opacity) {
     provider.setString("key-weather-products-opacity-v2", opacity.map((double e) => e.toString()).toList().join(","));
+  }
+
+  String getDismissedAppNotices() {
+    return provider.getValue("key-dismissed-app-notices", defaultValue: "") as String;
+  }
+
+  void setDismissedAppNotices(String value) {
+    provider.setString("key-dismissed-app-notices", value);
+  }
+
+  // Identity and role for AvareX-to-AvareX plan sync on the local network.
+  String getLinkDeviceId() {
+    return provider.getValue("key-link-device-id", defaultValue: "") as String;
+  }
+
+  void setLinkDeviceId(String value) {
+    provider.setString("key-link-device-id", value);
+  }
+
+  String getLinkDeviceName() {
+    return provider.getValue("key-link-device-name", defaultValue: "") as String;
+  }
+
+  void setLinkDeviceName(String value) {
+    provider.setString("key-link-device-name", value);
+  }
+
+  String getLinkRole() {
+    return provider.getValue("key-link-role", defaultValue: "off") as String;
+  }
+
+  void setLinkRole(String value) {
+    provider.setString("key-link-role", value);
   }
 
 }

@@ -1,6 +1,9 @@
 import 'package:avaremp/logbook/logbook_screen.dart';
+import 'package:avaremp/instruments/pfd_screen.dart';
 import 'package:avaremp/longpress_screen.dart';
+import 'package:avaremp/place/airspace_3d_screen.dart';
 import 'package:avaremp/plan/plan_action_screen.dart';
+import 'package:avaremp/services/app_check.dart';
 import 'package:avaremp/services/login_screen.dart';
 import 'package:avaremp/services/revenue_cat.dart';
 import 'package:avaremp/storage.dart';
@@ -18,6 +21,7 @@ import 'documents_screen.dart';
 import 'chart/download_screen.dart';
 import 'firebase_options.dart';
 import 'io/io_screen.dart';
+import 'link/link_screen.dart';
 import 'main_screen.dart';
 import 'scheduler/scheduler_screen.dart';
 import 'onboarding_screen.dart';
@@ -26,21 +30,55 @@ import 'services/backup_screen.dart';
 class CustomWidgetsBinding extends WidgetsFlutterBinding {
   @override
   ImageCache createImageCache() => Storage().imageCache;
+
+  final List<EmailVerificationController> _emailVerificationControllers = [];
+
+  @override
+  void addObserver(WidgetsBindingObserver observer) {
+    if (observer is EmailVerificationController) {
+      _emailVerificationControllers.add(observer);
+    }
+    super.addObserver(observer);
+  }
+
+  @override
+  bool removeObserver(WidgetsBindingObserver observer) {
+    if (observer is EmailVerificationController) {
+      _emailVerificationControllers.remove(observer);
+    }
+    return super.removeObserver(observer);
+  }
+
+  @override
+  void handleAppLifecycleStateChanged(AppLifecycleState state) {
+    // ProfileScreen never disposes EmailVerificationController; after sign-out
+    // it still receives resume and hits currentUser!. Drop it first.
+    for (final controller in List<EmailVerificationController>.of(
+        _emailVerificationControllers)) {
+      if (controller.auth.currentUser == null) {
+        controller.dispose();
+      }
+    }
+    super.handleAppLifecycleStateChanged(state);
+  }
 }
 
 void main() {
   // this is to control cache. Nexrad needs it or image caching will make it impossible to animate weather
   CustomWidgetsBinding();
   Storage().init().then((accentColor) async {
-    if(Constants.shouldShowProServices) {
+    if(Constants.firebaseAvailable) {
       try {
         await Firebase.initializeApp(
           options: DefaultFirebaseOptions.currentPlatform,
         );
+        await AppCheckService.activate();
         FirebaseUIAuth.configureProviders([
           EmailAuthProvider(),
         ]);
-        await RevenueCatService.initPlatformState();
+        if(Constants.shouldShowProServices) {
+          await RevenueCatService.initPlatformState();
+        }
       }
       catch (e) {
         // ignore errors here
@@ -74,7 +112,10 @@ class MainApp extends StatelessWidget {
               '/logbook': (context) => const LogbookScreen(),
               '/pro': (context) => const LoginScreen(),
               if(Constants.shouldShowBluetoothSpp || Constants.shouldShowBle) '/io': (context) => const IoScreen(),
+              if(Constants.shouldShowDeviceLink) '/link': (context) => const LinkScreen(),
               '/notes': (context) => const WritingScreen(),
+              '/airspace3d': (context) => const Airspace3DScreen(),
+              '/pfd': (context) => const PfdScreen(),
               '/plan_actions': (context) => const PlanActionScreen(),
               '/ai': (context) => const AiScreen(),
               '/backup': (context) => const BackupScreen(),

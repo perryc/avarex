@@ -90,7 +90,7 @@ class UserDatabaseHelper {
     return
       await openDatabase(
           path,
-          version: 7,
+          version: 9,
           onUpgrade: (Database db, int oldVersion, int newVersion) async {
             if (oldVersion <= 4 && newVersion > 4) {
               await db.execute("create table aiQueries("
@@ -124,6 +124,21 @@ class UserDatabaseHelper {
                   "ALTER TABLE aircraft ADD COLUMN icon TEXT DEFAULT 'plane';");
               await db.execute(
                   "ALTER TABLE aircraft ADD COLUMN wnbData TEXT DEFAULT '';");
+            }
+
+            // Migration to version 8: Best glide speed for the map glide circle
+            if (oldVersion <= 7 && newVersion > 7) {
+              await db.execute(
+                  "ALTER TABLE aircraft ADD COLUMN bestGlide TEXT DEFAULT '';");
+            }
+
+            // Migration to version 9: named profiles. settings is an opaque blob.
+            if (oldVersion <= 8 && newVersion > 8) {
+              await db.execute("create table if not exists profile ("
+                  "id           integer primary key autoincrement, "
+                  "name         text, "
+                  "settings     text, "
+                  "unique(name) on conflict replace);");
             }
           },
 
@@ -223,6 +238,7 @@ class UserDatabaseHelper {
                 "pic          text, "
                 "picInfo      text, "
                 "sinkRate     text, "
+                "bestGlide    text, "
                 "fuelBurn     text, "
                 "base         text, "
                 "other        text, "
@@ -235,6 +251,12 @@ class UserDatabaseHelper {
                 "cruiseData   text default '', "
                 "wnbData  text default '', "
                 "unique(tail) on conflict replace);");
+
+            await db.execute("create table profile ("
+                "id           integer primary key autoincrement, "
+                "name         text, "
+                "settings     text, "
+                "unique(name) on conflict replace);");
           },
           onOpen: (db) {});
   }
@@ -406,8 +428,8 @@ class UserDatabaseHelper {
   Future<Aircraft> getAircraft(String name) async {
     List<Map<String, dynamic>> maps = [];
     final db = await database;
-    if(db != null) {
-      maps = await DbGeneral.query(db, "select * from aircraft where tail='$name'"); // most recent first
+    if (db != null) {
+      maps = await db.query("aircraft", where: "tail = ?", whereArgs: [name.toUpperCase()]);
     }
     return Aircraft.fromMap(maps[0]);
   }
@@ -422,9 +444,8 @@ class UserDatabaseHelper {
 
   Future<void> deleteAircraft(String name) async {
     final db = await database;
-
     if (db != null) {
-      await DbGeneral.query(db, "delete from aircraft where tail='$name'");
+      await db.delete("aircraft", where: "tail = ?", whereArgs: [name.toUpperCase()]);
     }
   }
 
@@ -444,17 +465,15 @@ class UserDatabaseHelper {
 
   Future<void> insertSetting(String key, String? value) async {
     final db = await database;
-
-    if(db != null) {
-      await DbGeneral.query(db, "insert into settings (key, value) values ('$key', '$value')");
+    if (db != null) {
+      await DbGeneral.replace(db, "settings", {"key": key, "value": value ?? ""});
     }
   }
 
   Future<void> deleteSetting(String key) async {
     final db = await database;
-
-    if(db != null) {
-      await DbGeneral.query(db, "delete from settings where key=$key;");
+    if (db != null) {
+      await db.delete("settings", where: "key = ?", whereArgs: [key]);
     }
   }
 
@@ -464,6 +483,30 @@ class UserDatabaseHelper {
     if(db != null) {
       List<Map<String, dynamic>> maps = await DbGeneral.query(db, "select * from settings;");
       return maps;
+    }
+    return [];
+  }
+
+  Future<bool> addProfile(String name, String settings) async {
+    final db = await database;
+    if (db == null) {
+      return false;
+    }
+    final int id = await DbGeneral.replace(db, "profile", {"name": name, "settings": settings});
+    return id >= 0;
+  }
+
+  Future<void> deleteProfile(String name) async {
+    final db = await database;
+    if (db != null) {
+      await db.delete("profile", where: "name = ?", whereArgs: [name]);
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getAllProfiles() async {
+    final db = await database;
+    if (db != null) {
+      return await db.query("profile", orderBy: "id desc");
     }
     return [];
   }

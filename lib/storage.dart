@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:avaremp/avidyne/avidyne_ifd.dart';
 import 'package:avaremp/instruments/autopilot.dart';
+import 'package:avaremp/link/link_service.dart';
 import 'package:avaremp/io/io_screen.dart';
 import 'package:flutter/foundation.dart';
 import 'package:universal_io/io.dart';
@@ -27,6 +28,7 @@ import 'package:avaremp/gdl90/traffic_cache.dart';
 import 'package:avaremp/nmea/nmea_ownship_message.dart';
 import 'package:avaremp/utils/path_utils.dart';
 import 'package:avaremp/instruments/pfd_painter.dart';
+import 'package:avaremp/plan/hold.dart';
 import 'package:avaremp/plan/plan_route.dart';
 import 'package:avaremp/utils/stack_with_one.dart';
 import 'package:avaremp/utils/unit_conversion.dart';
@@ -59,6 +61,7 @@ import 'package:avaremp/io/ble_receiver.dart';
 import 'package:avaremp/io/reception_logger.dart';
 import 'utils/geojson_parser.dart';
 import 'io/gps.dart';
+import 'io/gps_kalman.dart';
 import 'nmea/nmea_buffer.dart';
 import 'nmea/nmea_message.dart';
 import 'nmea/nmea_message_factory.dart';
@@ -128,6 +131,15 @@ class Storage {
 
   final PlanRoute _route = PlanRoute("New Plan");
   PlanRoute get route => _route;
+
+  /// Holding pattern drawn on the map from the destination popup. One at a time.
+  final ValueNotifier<int> holdChange = ValueNotifier<int>(0);
+  HoldPattern? hold;
+
+  void setHold(HoldPattern? pattern) {
+    hold = pattern;
+    holdChange.value++;
+  }
   // Signature of the last active plan persisted to settings. Used to only write
   // to user.db when the plan or its current index actually changes.
   String _lastSavedPlanSignature = "";
@@ -207,6 +219,7 @@ class Storage {
 
   // gps
   final _gps = Gps();
+  final GpsKalman _gpsKalman = GpsKalman();
   final _udpReceiver = UdpReceiver();
   // where all data is place. This is set on init in main
   late String dataDir;
@@ -395,6 +408,8 @@ class Storage {
     // starts streaming its Capstone (GDL90) ADS-B data. That data arrives on
     // UDP 4000 above and flows through the normal GDL90 decoder.
     AvidyneIfd().start();
+    // Find other AvareX devices and, when this one is master, push the plan.
+    LinkService().start();
     try {
       // Have traffic cache listen for GPS changes for distance calc and (resulting) audible alert changes
       gpsChange.addListener(Storage().trafficCache.updateTrafficDistancesAndAlerts);
@@ -415,6 +430,12 @@ class Storage {
     }
     catch(e) {
       AppLog.logMessage("Error stopping Avidyne discovery: $e");
+    }
+    try {
+      LinkService().stop();
+    }
+    catch(e) {
+      AppLog.logMessage("Error stopping device link: $e");
     }
     try {
       _gpsStream?.cancel();
@@ -467,6 +488,7 @@ class Storage {
     DbGeneral.set(); // set database platform
 
     await settings.initSettings();
+    LinkService().load();
     initGpsSourceMode();
     trafficCache = TrafficCache(settings.getTrafficPuckSize());
     themeNotifier = ValueNotifier<ThemeData>(Storage().settings.isLightMode() ? ThemeData.light() : ThemeData.dark());
@@ -553,7 +575,7 @@ class Storage {
       _adsbWasConnected = adsbConnected;
 
       Position positionIn = _gpsStack.pop(); // used for testing and injecting GPS location
-      position = Gps.clone(positionIn, area.geoAltitude);
+      position = Gps.clone(_gpsKalman.apply(positionIn), area.geoAltitude);
       gpsChange.value = position; // tell everyone
 
       // update flight status
@@ -571,7 +593,7 @@ class Storage {
       }
 
       int diff = now - _lastMsGpsSignal;
-      if (diff > 2 * gpsSwitchoverTimeMs) { // no GPS signal from both sources, send warning
+      if (diff > GpsKalman.predictLimit.inMilliseconds) { // no GPS signal from both sources, send warning
         gpsNoLock = true;
       }
       else {
@@ -580,6 +602,9 @@ class Storage {
 
       // runway crossings are too brief for the 10 second area cadence
       area.updateRunwayAwareness();
+      // runway shown in perspective behind the PFD
+      area.updatePfdRunway();
+      area.updatePfdTerrain();
 
       if((timeChange.value % 10) == 0) {
         // update area every 10 seconds

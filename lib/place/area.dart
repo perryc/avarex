@@ -1,6 +1,8 @@
 import 'package:avaremp/data/main_database_helper.dart';
 import 'package:avaremp/destination/destination.dart';
 import 'package:avaremp/instruments/gpws_alerts.dart';
+import 'package:avaremp/instruments/pfd_runway.dart';
+import 'package:avaremp/instruments/pfd_terrain.dart';
 import 'package:avaremp/instruments/runway_awareness.dart';
 import 'package:avaremp/io/gps.dart';
 import 'package:avaremp/place/elevation_cache.dart';
@@ -25,6 +27,8 @@ class Area {
   GlideProfile glideProfile = GlideProfile();
   GpwsAlerts? _gpwsAlerts;
   RunwayAwareness? _runwayAwareness;
+  final PfdRunwaySelector _pfdRunway = PfdRunwaySelector();
+  final PfdTerrainSampler _pfdTerrain = PfdTerrainSampler();
 
   Future<void> update(Position position) async {
     double geo = 0;
@@ -36,11 +40,14 @@ class Area {
     if(d.isNotEmpty) {
       closestAirport = d[0];
     }
+    // candidate runways for the PFD synthetic runway
+    await _pfdRunway.loadAirports(closestAirport);
 
     final List<String> layers = Storage().settings.getLayers();
     final List<double> layersOpacity = Storage().settings.getLayersOpacity();
     int lIndex = layers.indexOf('Obstacles');
-    if(layersOpacity[lIndex] > 0) {
+    int navIndex = layers.indexOf('Nav'); // obstacles are drawn under the Nav layer
+    if(layersOpacity[lIndex] > 0 && layersOpacity[navIndex] > 0) {
       obstacles = await MainDatabaseHelper.db.findObstacles(Gps.toLatLng(position), GeoCalculations.convertAltitude(position.altitude));
     }
     // get surface wind from nearest airport
@@ -95,6 +102,16 @@ class Area {
       position: Storage().position,
       closestAirport: closestAirport,
     );
+  }
+
+  /// Pick the runway end to draw behind the PFD. Driven at 1 Hz from Storage.
+  void updatePfdRunway() {
+    _pfdRunway.update(Storage().position);
+  }
+
+  /// Sample elevation tiles for the PFD terrain mesh. 1 Hz, non-blocking.
+  Future<void> updatePfdTerrain() async {
+    await _pfdTerrain.update(Storage().position);
   }
 
   (double?, double?) getWind(double altitude) {

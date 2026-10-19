@@ -1,6 +1,8 @@
 name: Windows
 
-on: push
+on:
+  push:
+  workflow_dispatch:
 
 jobs:
 
@@ -9,6 +11,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       - name: Set app version
         shell: bash
         run: |
@@ -16,7 +20,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-          flutter-version: '3.35.1'
+          flutter-version: '3.47.2'
 
       - name: Find and Replace NMS FAA
         uses: richardrigutins/replace-in-files@v2
@@ -27,14 +31,41 @@ jobs:
           encoding: 'utf8'
           max-parallelism: 10
 
+      - name: Find and Replace App Check Windows debug token
+        uses: richardrigutins/replace-in-files@v2
+        with:
+          files: '**/*.dart'
+          search-text: '@@__app_check_windows_debug_token__@@'
+          replacement-text: ${{ secrets.APP_CHECK_WINDOWS_DEBUG_TOKEN }}
+          encoding: 'utf8'
+          max-parallelism: 10
+
       - name: Install project dependencies
         run: flutter pub get
 
-      - name: Integration Test
+      # Node 22.23.0 / 24.17.0 / 26 shipped an http.Agent keep-alive
+      # regression that breaks firebase-tools ADC auth (firebase-tools#10716),
+      # which makes `flutterfire configure` hang on an interactive prompt.
+      # Pin to a fixed Node release.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+
+      - name: Login to Firebase
+        shell: bash
         run: |
-          echo aW1wb3J0ICdwYWNrYWdlOmZpcmViYXNlX2NvcmUvZmlyZWJhc2VfY29yZS5kYXJ0JyBzaG93IEZpcmViYXNlT3B0aW9uczsKaW1wb3J0ICdwYWNrYWdlOmZsdXR0ZXIvZm91bmRhdGlvbi5kYXJ0JwogICAgc2hvdyBkZWZhdWx0VGFyZ2V0UGxhdGZvcm0sIGtJc1dlYiwgVGFyZ2V0UGxhdGZvcm07CgpjbGFzcyBEZWZhdWx0RmlyZWJhc2VPcHRpb25zIHsKICBzdGF0aWMgRmlyZWJhc2VPcHRpb25zIGdldCBjdXJyZW50UGxhdGZvcm0gewogICAgaWYgKGtJc1dlYikgewogICAgICByZXR1cm4gd2ViOwogICAgfQogICAgc3dpdGNoIChkZWZhdWx0VGFyZ2V0UGxhdGZvcm0pIHsKICAgICAgY2FzZSBUYXJnZXRQbGF0Zm9ybS5hbmRyb2lkOgogICAgICAgIHJldHVybiBhbmRyb2lkOwogICAgICBjYXNlIFRhcmdldFBsYXRmb3JtLmlPUzoKICAgICAgICByZXR1cm4gaW9zOwogICAgICBjYXNlIFRhcmdldFBsYXRmb3JtLm1hY09TOgogICAgICAgIHJldHVybiBtYWNvczsKICAgICAgY2FzZSBUYXJnZXRQbGF0Zm9ybS53aW5kb3dzOgogICAgICAgIHJldHVybiB3aW5kb3dzOwogICAgICBjYXNlIFRhcmdldFBsYXRmb3JtLmxpbnV4OgogICAgICAgIHRocm93IFVuc3VwcG9ydGVkRXJyb3IoCiAgICAgICAgICAnRGVmYXVsdEZpcmViYXNlT3B0aW9ucyBoYXZlIG5vdCBiZWVuIGNvbmZpZ3VyZWQgZm9yIGxpbnV4IC0gJwogICAgICAgICAgJ3lvdSBjYW4gcmVjb25maWd1cmUgdGhpcyBieSBydW5uaW5nIHRoZSBGbHV0dGVyRmlyZSBDTEkgYWdhaW4uJywKICAgICAgICApOwogICAgICBkZWZhdWx0OgogICAgICAgIHRocm93IFVuc3VwcG9ydGVkRXJyb3IoCiAgICAgICAgICAnRGVmYXVsdEZpcmViYXNlT3B0aW9ucyBhcmUgbm90IHN1cHBvcnRlZCBmb3IgdGhpcyBwbGF0Zm9ybS4nLAogICAgICAgICk7CiAgICB9CiAgfQoKICBzdGF0aWMgY29uc3QgRmlyZWJhc2VPcHRpb25zIHdlYiA9IEZpcmViYXNlT3B0aW9ucygKICAgIGFwaUtleTogJycsCiAgICBhcHBJZDogJycsCiAgICBtZXNzYWdpbmdTZW5kZXJJZDogJycsCiAgICBwcm9qZWN0SWQ6ICcnLAogICAgYXV0aERvbWFpbjogJycsCiAgICBzdG9yYWdlQnVja2V0OiAnJywKICAgIG1lYXN1cmVtZW50SWQ6ICcnLAogICk7CgogIHN0YXRpYyBjb25zdCBGaXJlYmFzZU9wdGlvbnMgYW5kcm9pZCA9IEZpcmViYXNlT3B0aW9ucygKICAgIGFwaUtleTogJycsCiAgICBhcHBJZDogJycsCiAgICBtZXNzYWdpbmdTZW5kZXJJZDogJycsCiAgICBwcm9qZWN0SWQ6ICcnLAogICAgc3RvcmFnZUJ1Y2tldDogJycsCiAgKTsKCiAgc3RhdGljIGNvbnN0IEZpcmViYXNlT3B0aW9ucyBpb3MgPSBGaXJlYmFzZU9wdGlvbnMoCiAgICBhcGlLZXk6ICcnLAogICAgYXBwSWQ6ICcnLAogICAgbWVzc2FnaW5nU2VuZGVySWQ6ICcnLAogICAgcHJvamVjdElkOiAnJywKICAgIHN0b3JhZ2VCdWNrZXQ6ICcnLAogICAgaW9zQnVuZGxlSWQ6ICcnLAogICk7CgogIHN0YXRpYyBjb25zdCBGaXJlYmFzZU9wdGlvbnMgbWFjb3MgPSBGaXJlYmFzZU9wdGlvbnMoCiAgICBhcGlLZXk6ICcnLAogICAgYXBwSWQ6ICcnLAogICAgbWVzc2FnaW5nU2VuZGVySWQ6ICcnLAogICAgcHJvamVjdElkOiAnJywKICAgIHN0b3JhZ2VCdWNrZXQ6ICcnLAogICAgaW9zQnVuZGxlSWQ6ICcnLAogICk7CgogIHN0YXRpYyBjb25zdCBGaXJlYmFzZU9wdGlvbnMgd2luZG93cyA9IEZpcmViYXNlT3B0aW9ucygKICAgIGFwaUtleTogJycsCiAgICBhcHBJZDogJycsCiAgICBtZXNzYWdpbmdTZW5kZXJJZDogJycsCiAgICBwcm9qZWN0SWQ6ICcnLAogICAgYXV0aERvbWFpbjogJycsCiAgICBzdG9yYWdlQnVja2V0OiAnJywKICAgIG1lYXN1cmVtZW50SWQ6ICcnLAogICk7Cgp9Cg== > b64o
-          certutil -decode b64o lib/firebase_options.dart
-#          flutter test --verbose integration_test/app_test.dart -d windows
+          # Pinned: firebase-tools 15.22.2 has an ADC/service-account auth
+          # regression (firebase-tools#10716) that makes `flutterfire
+          # configure` hang on an interactive "create project?" prompt.
+          # Unpin once a fixed release ships.
+          npm install -g firebase-tools@15.22.1
+          echo -n ${{ secrets.GOOGLE_SERVICES_KEY }} | base64 -d > key.json
+          export GOOGLE_APPLICATION_CREDENTIALS="key.json"
+          dart pub global activate flutterfire_cli
+          # Windows Git Bash cannot see the pub-cache .bat shim as `flutterfire`.
+          # Invoke the CLI through Dart so PATH is not required.
+          dart pub global run flutterfire_cli:flutterfire configure \
+            --project avarex-479ae --platforms windows --yes < /dev/null
 
       - name: Build artifacts
         run: flutter build windows --release
@@ -51,6 +82,16 @@ jobs:
         run: |
           mkdir -p build/artifacts
           cp "build/windows/x64/runner/Release/${{ github.ref_name }}-windows.zip" "build/artifacts/avarex_windows_${APP_VERSION}_${{ github.ref_name }}.zip"
+          MSIX="$(find . \( -name '*.msix' -o -name '*.msixupload' \) ! -path './.git/*' | head -1 || true)"
+          if [[ -n "$MSIX" ]]; then
+            mkdir -p build/store-msix
+            cp "$MSIX" "build/artifacts/avarex_windows_${APP_VERSION}_${{ github.ref_name }}.msix"
+            cp "$MSIX" "build/store-msix/$(basename "$MSIX")"
+            echo "MSIX_PATH=$MSIX" >> "$GITHUB_ENV"
+            echo "MSIX_DIR=build/store-msix" >> "$GITHUB_ENV"
+          else
+            echo "No MSIX found after msix:create; Windows store upload will fail if attempted."
+          fi
       - name: Windows Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
@@ -70,3 +111,60 @@ jobs:
           scp -o StrictHostKeyChecking=accept-new build/artifacts/* apps4av@apps4av.org:/home/apps4av/builds/
         env:
           MAMBA_PASSWORD: ${{ secrets.MAMBA_PASSWORD }}
+
+      - name: Decide store upload
+        id: store
+        shell: bash
+        env:
+          VERSION_FILE: pubspec.yaml
+          VERSION_PATTERN: '^\+\s*(version:|msix_version:)'
+          REQUIRED_SECRET: ${{ secrets.PARTNER_CENTER_CLIENT_SECRET }}
+          FORCE_STORE_UPLOAD: ${{ github.event_name == 'workflow_dispatch' && 'true' || '' }}
+        run: bash .github/scripts/should-publish-store.sh
+
+      - name: Setup Microsoft Store Developer CLI
+        if: steps.store.outputs.publish == 'true'
+        uses: microsoft/microsoft-store-apppublisher@v1.1
+
+      - name: Upload to Windows Store (manual publish)
+        if: steps.store.outputs.publish == 'true'
+        shell: bash
+        env:
+          PARTNER_CENTER_TENANT_ID: ${{ secrets.PARTNER_CENTER_TENANT_ID }}
+          PARTNER_CENTER_SELLER_ID: ${{ secrets.PARTNER_CENTER_SELLER_ID }}
+          PARTNER_CENTER_CLIENT_ID: ${{ secrets.PARTNER_CENTER_CLIENT_ID }}
+          PARTNER_CENTER_CLIENT_SECRET: ${{ secrets.PARTNER_CENTER_CLIENT_SECRET }}
+        run: |
+          msstore reconfigure \
+            --tenantId "$PARTNER_CENTER_TENANT_ID" \
+            --sellerId "$PARTNER_CENTER_SELLER_ID" \
+            --clientId "$PARTNER_CENTER_CLIENT_ID" \
+            --clientSecret "$PARTNER_CENTER_CLIENT_SECRET"
+          if [[ -z "${MSIX_DIR:-}" ]]; then
+            echo "MSIX_DIR is empty; cannot upload the Windows Store draft."
+            exit 1
+          fi
+          REPO="${GITHUB_WORKSPACE:-.}"
+          MSIX_ABS="$(cd "$MSIX_DIR" && pwd)"
+          echo "Publishing MSIX from $MSIX_ABS using Flutter project $REPO"
+          ls -la "$MSIX_ABS"
+          msstore submission delete 9MX4HKL30MWW --no-confirm || \
+            echo "No pending draft to delete (or delete skipped)."
+          # pathOrUrl must be the Flutter repo (needs a project publisher).
+          # --inputDirectory is the folder that contains only the new .msix.
+          # Using the MSIX folder as pathOrUrl fails with exit 127:
+          # "could not find a project publisher". Using the repo without
+          # --inputDirectory copies the last published Store packages.
+          # --noCommit uploads only; the follow-up script sets Manual and
+          # commits so Partner Center shows the new version without going live.
+          msstore publish "$REPO" \
+            --inputDirectory "$MSIX_ABS" \
+            --appId 9MX4HKL30MWW \
+            --noCommit \
+            --uploadTimeout 600 \
+            -v
+          if command -v python3 >/dev/null 2>&1; then
+            python3 .github/scripts/windows-store-keep-draft.py
+          else
+            python .github/scripts/windows-store-keep-draft.py
+          fi

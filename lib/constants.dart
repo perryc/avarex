@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:universal_io/io.dart';
 
 import 'package:flutter/material.dart';
@@ -45,14 +46,20 @@ class Constants {
   static Color bottomNavBarIconColor = Colors.white;
 
   static const Color distanceCircleColor = Color.fromARGB(255, 58, 58, 58);
-  static const Color speedCircleColor = Color.fromARGB(255, 0, 0, 180);
-  static const Color glideCircleColor = Color.fromARGB(255, 150, 0, 150);
+  static const Color speedCircleColor = Color.fromARGB(255, 0, 0, 255);
+  static const Color glideCircleColor = Color.fromARGB(255, 255, 255, 255);
+  // halos drawn under the glide and 1 minute rings, which are otherwise hard to
+  // pick out against the chart
+  static const Color glideCircleHaloColor = Color.fromARGB(255, 255, 140, 0);
+  static const Color speedCircleHaloColor = Color.fromARGB(255, 255, 235, 0);
   static const Color planCurrentColor = Colors.purpleAccent;
   static const Color planNextColor = Colors.grey;
   static const Color planPassedColor = Colors.cyanAccent;
   static const Color trackColor = Colors.brown;
   static const Color tracksColor = Colors.green;
   static const Color planBorderColor = Colors.black;
+  static const Color holdPatternColor = Color.fromARGB(255, 156, 39, 176);
+  static const Color holdEntryColor = Color.fromARGB(255, 255, 111, 0);
   static const Color planeColor = Color.fromARGB(150, 255, 0, 0);
   static const Color plateMarkColor = Color.fromARGB(150, 0, 255, 0);
   static const Color tfrColor = Color.fromARGB(255, 255, 0, 0);
@@ -98,12 +105,16 @@ class Constants {
   static final bool shouldShowPdf = !(Platform.isLinux);
   static final bool shouldShowBluetoothSpp = (Platform.isAndroid);
   static final bool shouldShowBle = (Platform.isAndroid || Platform.isIOS || Platform.isMacOS);
+  // Phones and tablets on the same Wi-Fi can share a plan. No sockets on web.
+  static final bool shouldShowDeviceLink = !kIsWeb;
   static final bool shouldShouldReview = (Platform.isMacOS || Platform.isIOS | Platform.isAndroid || Platform.isWindows);
   static final bool shouldShowProServices = (Platform.isIOS || Platform.isAndroid);
 
   // Whether the Firebase-backed cloud features (e.g. Airport Businesses &
   // Reviews) are available. Firebase is only initialized on these platforms
   // (see main.dart), so this is a capability gate, NOT a Pro/paywall gate.
-  static final bool firebaseAvailable = (Platform.isIOS || Platform.isAndroid);
+  // Flight Intelligence stays on shouldShowProServices (iOS/Android).
+  static final bool firebaseAvailable =
+      (Platform.isIOS || Platform.isAndroid || Platform.isWindows || Platform.isMacOS);
 
 }

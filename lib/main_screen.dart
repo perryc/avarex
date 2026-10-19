@@ -1,6 +1,9 @@
+import 'package:avaremp/community/notifications_screen.dart';
 import 'package:avaremp/onboarding_screen.dart';
+import 'package:avaremp/services/app_notice_service.dart';
 import 'package:avaremp/plan/plan_screen.dart';
 import 'package:avaremp/plate_screen.dart';
+import 'package:avaremp/services/login_screen.dart';
 import 'package:avaremp/storage.dart';
 import 'package:avaremp/utils/pdf_viewer.dart';
 import 'package:flutter/material.dart';
@@ -28,6 +31,8 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver { //
 
   bool _drawerOpen = false;
   int _selectedIndex = tabLocationMap; // for various tab screens
+  bool _noticesOpen = false;
+  DateTime _noticesCheckedAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   // define tabs here
   final List<Widget> _widgetOptions = [];
@@ -67,6 +72,7 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver { //
     required String subtitle,
     required VoidCallback onTap,
     Color? iconColor,
+    Widget? trailing,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -114,6 +120,10 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver { //
                     ],
                   ),
                 ),
+                if (trailing != null) ...[
+                  trailing,
+                  const SizedBox(width: 8),
+                ],
                 Icon(
                   Icons.chevron_right,
                   size: 20,
@@ -313,6 +323,36 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver { //
                       _buildSectionHeader(context, "Flight"),
                       _buildMenuItem(
                         context,
+                        icon: MdiIcons.transcribe,
+                        title: "Write a Note",
+                        subtitle: "Handwriting notes & aviation sheets",
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.pushNamed(context, '/notes');
+                        },
+                      ),
+                      _buildMenuItem(
+                        context,
+                        icon: Icons.view_in_ar_outlined,
+                        title: "3D",
+                        subtitle: "Airspace, terrain, and ADS-B traffic",
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.pushNamed(context, '/airspace3d');
+                        },
+                      ),
+                      _buildMenuItem(
+                        context,
+                        icon: MdiIcons.airplaneCog,
+                        title: "PFD",
+                        subtitle: "Attitude, speed, altitude, course",
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.pushNamed(context, '/pfd');
+                        },
+                      ),
+                      _buildMenuItem(
+                        context,
                         icon: MdiIcons.checkboxMarkedOutline,
                         title: "Check Lists",
                         subtitle: "Pre-flight & procedures",
@@ -343,19 +383,87 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver { //
                           Navigator.pushNamed(context, '/logbook');
                         },
                       ),
-                      if (Constants.shouldShowBluetoothSpp || Constants.shouldShowBle) ...[
+                      if (Constants.firebaseAvailable) ...[
                         const SizedBox(height: 8),
-                        _buildSectionHeader(context, "Connectivity"),
+                        _buildSectionHeader(context, "Internet"),
                         _buildMenuItem(
                           context,
-                          icon: Icons.compare_arrows_rounded,
-                          title: "IO",
-                          subtitle: "Bluetooth & connections",
+                          icon: MdiIcons.account,
+                          title: "Account",
+                          subtitle: "Sign in, profile, sign out",
                           onTap: () {
                             Navigator.pop(context);
-                            Navigator.pushNamed(context, '/io');
+                            Navigator.pushNamed(context, '/pro');
                           },
                         ),
+                        _buildMenuItem(
+                          context,
+                          icon: MdiIcons.cloudSync,
+                          title: "Backup/Sync",
+                          subtitle: "Cloud backup & restore",
+                          onTap: () {
+                            Navigator.pop(context);
+                            LoginScreenState.openCloudFeature(context, '/backup');
+                          },
+                        ),
+                        _buildMenuItem(
+                          context,
+                          icon: MdiIcons.accountGroup,
+                          title: "Community",
+                          subtitle: "Pilot groups, posts, shared plans",
+                          trailing: const CommunityNotificationsBadge(),
+                          onTap: () {
+                            Navigator.pop(context);
+                            LoginScreenState.openCloudFeature(context, '/community');
+                          },
+                        ),
+                        _buildMenuItem(
+                          context,
+                          icon: MdiIcons.calendarClock,
+                          title: "Scheduler",
+                          subtitle: "Aircraft booking & dispatch",
+                          onTap: () {
+                            Navigator.pop(context);
+                            LoginScreenState.openCloudFeature(context, '/scheduler');
+                          },
+                        ),
+                        if (Constants.shouldShowProServices)
+                          _buildMenuItem(
+                            context,
+                            icon: MdiIcons.robot,
+                            title: "Flight Intelligence",
+                            subtitle: "Ask aviation questions (Pro)",
+                            onTap: () {
+                              Navigator.pop(context);
+                              LoginScreenState.showPaywall(context, '/ai');
+                            },
+                          ),
+                      ],
+                      if (Constants.shouldShowBluetoothSpp || Constants.shouldShowBle || Constants.shouldShowDeviceLink) ...[
+                        const SizedBox(height: 8),
+                        _buildSectionHeader(context, "Connectivity"),
+                        if (Constants.shouldShowDeviceLink)
+                          _buildMenuItem(
+                            context,
+                            icon: Icons.hub,
+                            title: "Link",
+                            subtitle: "Share the plan with other devices",
+                            onTap: () {
+                              Navigator.pop(context);
+                              Navigator.pushNamed(context, '/link');
+                            },
+                          ),
+                        if (Constants.shouldShowBluetoothSpp || Constants.shouldShowBle)
+                          _buildMenuItem(
+                            context,
+                            icon: Icons.compare_arrows_rounded,
+                            title: "IO",
+                            subtitle: "Bluetooth & connections",
+                            onTap: () {
+                              Navigator.pop(context);
+                              Navigator.pushNamed(context, '/io');
+                            },
+                          ),
                       ],
                       const SizedBox(height: 8),
                       _buildSectionHeader(context, "Support"),
@@ -440,6 +548,28 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver { //
     super.initState();
     Storage().startIO();
     WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAppNotices();
+    });
+  }
+
+  /// Pull Apps4Av messages from Firestore and show any the pilot has not
+  /// dismissed. Checked on open and when the app returns to the foreground.
+  Future<void> _checkAppNotices() async {
+    if (_noticesOpen || !mounted || !Constants.firebaseAvailable) {
+      return;
+    }
+    final DateTime now = DateTime.now();
+    if (now.difference(_noticesCheckedAt) < const Duration(seconds: 20)) {
+      return;
+    }
+    _noticesCheckedAt = now;
+    _noticesOpen = true;
+    try {
+      await AppNoticeService.instance.present(context);
+    } finally {
+      _noticesOpen = false;
+    }
   }
 
   @override
@@ -449,6 +579,7 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver { //
       case AppLifecycleState.resumed:
         // start GPS
         Storage().startIO();
+        _checkAppNotices();
         break;
       default:
         Storage().stopIO();

@@ -70,7 +70,7 @@ FLIGHT PLANNING
 • Send plans to NMEA 0183 devices over Bluetooth (Android)
 
 AIRCRAFT & PERFORMANCE
-• Built-in profiles (C152, C172S, C182T, PA-28, PA-44, Beech A36, Cirrus SR22, DA40) plus your own
+• Built-in profiles (C152, C172S, C182T, PA-28, PA-44, Beech A36, Cirrus SR22, DA40, RV-9A) plus your own
 • Takeoff, landing, and cruise performance with density altitude
 • Weight & balance with interactive CG envelope (fixed-wing and helicopter)
 
@@ -131,12 +131,13 @@ Reuse the Google Play full description above (it is within Apple's limit). The a
 
 ### What's New (per version)
 
+Do not edit this by hand. It is generated from the latest **AvareX Releases** entry in `USER_MANUAL.md`:
+
+```bash
+bash .github/scripts/update-whatsnew.sh
 ```
-• Performance and stability improvements
-• Updated charts, plates, and weather products
-• Bug fixes
-Thank you for flying with AvareX. Send feedback at the Apps4Av forum.
-```
+
+Paste from `store/whatsnew/whatsnew-en-US` (Play’s 500-character limit).
 
 ---
 
@@ -168,6 +169,6 @@ Source images live in `assets/docs/screenshots/`. Suggested order (lead with the
 
 ## Notes / Disclaimers to keep in copy
 
-- AvareX is **not** an FAA-certified GPS; not for sole-means navigation.
+- AvareX is **not** an FAA-certified GPS or approved nav/weather/traffic system; not for sole-means or safety-critical use. Pilot in command remains solely responsible.
 - The core EFB is **free to download and use**. Pro Services (Flight Intelligence AI, Cloud Backup/Sync, Pilot Community, Aircraft Scheduler) are **iOS/Android only** and require a **$5/month subscription** (auto-renewing; RevenueCat `Pro` entitlement). Disclose subscription terms in store copy.
 - Internet required for downloads, weather, AI, FAA plan filing, and cloud backup; core navigation works offline once charts/databases are downloaded.
