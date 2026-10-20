@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:avaremp/io/softrf_config.dart';
 import 'package:avaremp/storage.dart';
 import 'package:avaremp/utils/app_log.dart';
 import 'package:flutter/foundation.dart';
@@ -169,13 +170,51 @@ class BleLink {
         Storage().receptionLogger.onFrame(name, frame);
         Storage().gdl90Buffer.put(frame);
       },
-      (sentence) => Storage().nmeaBuffer.put(sentence));
+      _onNmea);
   late final StreamFramer _hm10Framer = StreamFramer(
       (frame) {
         Storage().receptionLogger.onFrame(name, frame);
         Storage().gdl90Buffer.put(frame);
       },
-      (sentence) => Storage().nmeaBuffer.put(sentence));
+      _onNmea);
+
+  // SoftRF configuration as last reported by the unit ("" until queried)
+  final ValueNotifier<String> softRfInfo = ValueNotifier("");
+  int? softRfAddress;
+
+  bool get isSoftRf => name.toLowerCase().startsWith("softrf");
+
+  // settings replies are consumed here; everything else is receiver data
+  void _onNmea(Uint8List sentence) {
+    final String s = String.fromCharCodes(sentence);
+    if(s.startsWith("\$PSRFA,") || s.startsWith("\$PSRFC,")) {
+      final int? addr = SoftRfConfig.parseAddressReply(s);
+      if(addr != null) {
+        softRfAddress = addr;
+      }
+      final String? cfg = SoftRfConfig.describeSettingsReply(s);
+      final String a = softRfAddress == null ? ""
+          : "ID ${softRfAddress!.toRadixString(16).toUpperCase().padLeft(6, '0')}";
+      softRfInfo.value = [a, if(cfg != null) cfg].where((e) => e.isNotEmpty).join(" \u00b7 ");
+      return;
+    }
+    Storage().nmeaBuffer.put(sentence);
+  }
+
+  // ask a SoftRF unit for its address and settings (replies arrive via _onNmea)
+  Future<void> querySoftRf() async {
+    await send(SoftRfConfig.queryAddress().codeUnits);
+    await send(SoftRfConfig.querySettings().codeUnits);
+  }
+
+  // set the aircraft address, then the traffic-link settings; the unit
+  // restarts on the settings sentence and this link auto-reconnects
+  Future<void> configureSoftRf({required int icao, required int protocol}) async {
+    await send(SoftRfConfig.setAddress(icao).codeUnits);
+    await Future.delayed(const Duration(milliseconds: 500));
+    await send(SoftRfConfig.settings(protocol: protocol).codeUnits);
+    softRfInfo.value = "Configuring, unit restarting\u2026";
+  }
   late final UplinkReassembler _uplinkReassembler = UplinkReassembler((frame) {
     Storage().receptionLogger.onFrame(name, frame);
     Storage().gdl90Buffer.put(frame);
@@ -286,7 +325,7 @@ class BleLink {
               _dataSubs.add(c.onValueReceived.listen(_hm10Framer.feed));
               await c.setNotifyValue(true);
               subscribed = true;
-              _control ??= c;
+              _control = c; // SoftRF reads its serial input here, prefer it
             }
           }
         }
@@ -294,6 +333,9 @@ class BleLink {
     }
     if(!subscribed) {
       throw Exception("no ADS-B or UART service");
+    }
+    if(isSoftRf) {
+      await querySoftRf();
     }
   }
 
