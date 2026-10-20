@@ -182,6 +182,9 @@ class BleLink {
   final ValueNotifier<String> softRfInfo = ValueNotifier("");
   int? softRfAddress;
   bool? softRfMux;
+  // settings sentence to send once the unit comes back from the restart
+  // that the address sentence triggers
+  String? _pendingSettings;
 
   bool get isSoftRf => name.toLowerCase().startsWith("softrf");
 
@@ -210,13 +213,12 @@ class BleLink {
     await send(SoftRfConfig.querySettings().codeUnits);
   }
 
-  // set the aircraft address, then the traffic-link settings; the unit
-  // restarts on the settings sentence and this link auto-reconnects
+  // set the aircraft address (the unit stores it and restarts), then send
+  // the traffic-link settings when the link comes back (second restart)
   Future<void> configureSoftRf({required int icao, required int protocol, bool mux = false}) async {
+    _pendingSettings = SoftRfConfig.settings(protocol: protocol);
     await send(SoftRfConfig.setAddress(icao, mux: mux).codeUnits);
-    await Future.delayed(const Duration(milliseconds: 500));
-    await send(SoftRfConfig.settings(protocol: protocol).codeUnits);
-    softRfInfo.value = "Configuring, unit restarting\u2026";
+    softRfInfo.value = "Address sent, unit restarting\u2026";
   }
   late final UplinkReassembler _uplinkReassembler = UplinkReassembler((frame) {
     Storage().receptionLogger.onFrame(name, frame);
@@ -338,6 +340,14 @@ class BleLink {
       throw Exception("no ADS-B or UART service");
     }
     if(isSoftRf) {
+      final String? pending = _pendingSettings;
+      if(pending != null) {
+        _pendingSettings = null;
+        await Future.delayed(const Duration(seconds: 1)); // let the unit settle
+        await send(pending.codeUnits);
+        softRfInfo.value = "Settings sent, unit restarting\u2026";
+        return; // query on the next reconnect
+      }
       await querySoftRf();
     }
   }
