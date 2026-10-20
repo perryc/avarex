@@ -315,6 +315,9 @@ class Storage {
             if (gpsSourceMode == "Internal") {
               continue;
             }
+            if (m.nic == 0) {
+              continue; // GDL90: no navigation integrity = no fix (lat/lon are placeholders)
+            }
             Position p = Position(longitude: m.coordinates.longitude, latitude: m.coordinates.latitude, timestamp: DateTime.timestamp(), accuracy: 0, altitude: m.altitude, altitudeAccuracy: 0, heading: m.heading, headingAccuracy: 0, speed: m.velocity, speedAccuracy: 0);
             if(Gps.isPositionCloseToZero(p)) {
               continue; // skip 0, 0 when GPS is not locked
@@ -363,6 +366,9 @@ class Storage {
               continue;
             }
             NmeaOwnShipMessage m0 = m;
+            if(!m0.fixValid) {
+              continue; // receiver reports no fix: coordinates are stale or zero
+            }
             Position p = Position(longitude: m0.coordinates.longitude, latitude: m0.coordinates.latitude, timestamp: DateTime.timestamp(), accuracy: 0, altitude: m0.altitude, altitudeAccuracy: 0, heading: m0.heading, headingAccuracy: 0, speed: m0.velocity, speedAccuracy: 0);
             if(Gps.isPositionCloseToZero(p)) {
               continue; // skip 0, 0 when GPS is not locked

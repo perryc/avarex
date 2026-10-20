@@ -23,9 +23,15 @@ class NmeaOwnShipMessage extends NmeaMessage {
   double geoidSeparation = 0;
   double? diffAge;
   bool hasGga = false;
+  // false when the sentences say the receiver has no fix (RMC "V" or GGA
+  // quality 0); the coordinates are then stale or zero and must not be used
+  bool fixValid = true;
 
   void _copyQuality(GGAMessage gga) {
     fixQuality = gga.fixQuality;
+    if(fixQuality == 0) {
+      fixValid = false;
+    }
     satellites = gga.satellites;
     hdop = gga.hdop;
     geoidSeparation = gga.geoidSeparation;
@@ -41,6 +47,9 @@ class NmeaOwnShipMessage extends NmeaMessage {
       // bug
     }
     else if(gga == null && rmc != null) {
+      if(!rmc.valid) {
+        m.fixValid = false;
+      }
       m.velocity = rmc.speed;
       m.heading = rmc.track;
       m.coordinates = rmc.coordinate;
