@@ -128,6 +128,14 @@ class AppSettings {
   }
 
   // Precision approach (RTK ILS-like guidance)
+  int getSurveySyncMs() {
+    return provider.getValue("key-approach-survey-sync-ms", defaultValue: 0) as int;
+  }
+
+  void setSurveySyncMs(int value) {
+    provider.setInt("key-approach-survey-sync-ms", value);
+  }
+
   double getApproachGlideslope() {
     return provider.getValue("key-approach-glideslope", defaultValue: 3.0) as double;
   }

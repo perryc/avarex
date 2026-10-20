@@ -1127,7 +1127,7 @@ ILS-style guidance to a runway from GPS, meant for a centimetre-class RTK or PPP
 - **Readouts**: distance and height above threshold at the top, then cross-track, glidepath error, HAT, ground speed, actual glidepath angle, and track versus runway heading along the bottom.
 - **GPS badge**: `RTK FIX` (green), `RTK FLT` (yellow), `DGPS`, `GPS`, `ADS-B` or `INT GPS` (orange), with satellites, HDOP, correction age and the fix rate. The fix stream here is the receiver's own rate, not the 1 Hz map position. `STALE` after 2 s without a fix.
 - **Rollout**: over the pavement only the centerline guidance remains.
-- **Surveyed runways** (ruler icon): import PPA airport `.json` files (the `ppa_airports` community repository format) or PPA survey `.geojson` exports; list and delete them.
+- **Surveyed runways** (ruler icon): **Sync community database** downloads every surveyed airport from `github.com/perryc/ppa_airports` (needs internet; the last sync time is shown). You can also import PPA airport `.json` files or PPA survey `.geojson` exports by hand, and list or delete what is stored.
 - **Settings**: glideslope angle, threshold crossing height, chevron step, on-centerline tolerance.
 
 Experimental supplemental guidance. The geometry is only as good as the GPS fix and the runway survey; it is not an approved approach.

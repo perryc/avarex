@@ -189,6 +189,22 @@ void main() {
     });
   });
 
+  group('Community sync', () {
+    test('picks airport JSON blobs out of the GitHub tree', () {
+      const String tree = '''
+{"sha":"x","tree":[
+ {"path":"README.md","type":"blob"},
+ {"path":"airports","type":"tree"},
+ {"path":"airports/CD","type":"tree"},
+ {"path":"airports/CD/CDS2.json","type":"blob","size":3852},
+ {"path":"airports/CY/CYQR.JSON","type":"blob"},
+ {"path":"schema.json","type":"blob"},
+ {"path":".github/scripts/generate_survey_map.py","type":"blob"}],"truncated":false}''';
+      expect(RunwaySurveySync.airportPathsFromTree(tree), ["airports/CD/CDS2.json", "airports/CY/CYQR.JSON"]);
+      expect(RunwaySurveySync.airportPathsFromTree("{}"), isEmpty);
+    });
+  });
+
   group('Selector merge', () {
     test('surveyed runway replaces the database row with the same idents and adds unknown ones', () {
       final PfdRunwayEnd db36 = northRunway();
