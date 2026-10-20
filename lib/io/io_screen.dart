@@ -187,8 +187,9 @@ class IoScreenState extends State<IoScreen> {
                     valueListenable: link.status,
                     builder: (context, s, _) => ValueListenableBuilder<String>(
                         valueListenable: link.softRfInfo,
-                        builder: (context, info, _) =>
-                            Text(info.isEmpty ? s : "$s \u00b7 $info"))),
+                        builder: (context, info, _) => Text([
+                              s, link.dataAge, info
+                            ].where((e) => e.isNotEmpty).join(" \u00b7 ")))),
                 trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                   if(link.isSoftRf)
                     IconButton(

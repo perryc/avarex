@@ -165,18 +165,28 @@ class BleLink {
   BluetoothCharacteristic? _control;
   final List<StreamSubscription<List<int>>> _dataSubs = [];
   StreamSubscription<BluetoothConnectionState>? _connectionSub;
-  late final StreamFramer _framer = StreamFramer(
-      (frame) {
-        Storage().receptionLogger.onFrame(name, frame);
-        Storage().gdl90Buffer.put(frame);
-      },
-      _onNmea);
-  late final StreamFramer _hm10Framer = StreamFramer(
-      (frame) {
-        Storage().receptionLogger.onFrame(name, frame);
-        Storage().gdl90Buffer.put(frame);
-      },
-      _onNmea);
+  // when the last byte arrived on this link (0 = never); the receiver row
+  // shows its age so "connected but silent" is visible at a glance
+  int lastDataMs = 0;
+  Timer? _ageTimer;
+
+  void _onFrame(Uint8List frame) {
+    lastDataMs = DateTime.now().millisecondsSinceEpoch;
+    Storage().receptionLogger.onFrame(name, frame);
+    Storage().gdl90Buffer.put(frame);
+  }
+
+  late final StreamFramer _framer = StreamFramer(_onFrame, _onNmea);
+  late final StreamFramer _hm10Framer = StreamFramer(_onFrame, _onNmea);
+
+  /// "2 s ago" / "no data for 40 s" / "" when nothing has arrived yet
+  String get dataAge {
+    if(lastDataMs == 0) {
+      return isConnected ? "no data yet" : "";
+    }
+    final int s = (DateTime.now().millisecondsSinceEpoch - lastDataMs) ~/ 1000;
+    return s < 10 ? "data ${s}s ago" : "no data for ${s}s";
+  }
 
   // SoftRF configuration as last reported by the unit ("" until queried)
   final ValueNotifier<String> softRfInfo = ValueNotifier("");
@@ -190,6 +200,7 @@ class BleLink {
 
   // settings replies are consumed here; everything else is receiver data
   void _onNmea(Uint8List sentence) {
+    lastDataMs = DateTime.now().millisecondsSinceEpoch;
     final String s = String.fromCharCodes(sentence);
     if(s.startsWith("\$PSRFA,") || s.startsWith("\$PSRFC,")) {
       final int? addr = SoftRfConfig.parseAddressReply(s);
@@ -220,10 +231,7 @@ class BleLink {
     await send(SoftRfConfig.setAddress(icao, mux: mux).codeUnits);
     softRfInfo.value = "Address sent, unit restarting\u2026";
   }
-  late final UplinkReassembler _uplinkReassembler = UplinkReassembler((frame) {
-    Storage().receptionLogger.onFrame(name, frame);
-    Storage().gdl90Buffer.put(frame);
-  });
+  late final UplinkReassembler _uplinkReassembler = UplinkReassembler(_onFrame);
   bool _running = false;
 
   String get id => _device.remoteId.str;
@@ -233,6 +241,17 @@ class BleLink {
 
   Future<void> start() async {
     _running = true;
+    _ageTimer ??= Timer.periodic(const Duration(seconds: 2), (_) {
+      // refresh the row (data age) and nudge a stalled reconnect: the OS
+      // autoConnect usually brings the link back on its own, but a receiver
+      // that rebooted mid-session has been seen to stay disconnected
+      if(_running && !isConnected && lastDataMs != 0 &&
+          DateTime.now().millisecondsSinceEpoch - lastDataMs > 15000) {
+        _device.connect(autoConnect: true, mtu: null).catchError((_) {});
+        lastDataMs = DateTime.now().millisecondsSinceEpoch - 5000; // retry again in ~10 s
+      }
+      _owner.change.value++;
+    });
     _connectionSub = _device.connectionState.listen((state) async {
       if(state == BluetoothConnectionState.connected) {
         try {
@@ -367,6 +386,8 @@ class BleLink {
 
   Future<void> stop() async {
     _running = false;
+    _ageTimer?.cancel();
+    _ageTimer = null;
     for(var sub in _dataSubs) {
       await sub.cancel();
     }
