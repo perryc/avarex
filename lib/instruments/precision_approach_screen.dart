@@ -426,8 +426,25 @@ class _PrecisionApproachScreenState extends State<PrecisionApproachScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 ListTile(
+                  leading: _syncing ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.cloud_download),
+                  title: const Text("Sync community database"),
+                  subtitle: Text(_syncing
+                      ? "Fetching $_syncProgress"
+                      : (Storage().settings.getSurveySyncMs() == 0
+                          ? "github.com/${RunwaySurveySync.repo}, never synced"
+                          : "github.com/${RunwaySurveySync.repo}, last ${DateTime.fromMillisecondsSinceEpoch(Storage().settings.getSurveySyncMs()).toLocal().toString().substring(0, 16)}")),
+                  enabled: !_syncing,
+                  onTap: () async {
+                    final String msg = await _syncSurveys(() => setSheet(() {}));
+                    if (ctx.mounted) {
+                      ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(msg)));
+                      setSheet(() {});
+                    }
+                  },
+                ),
+                ListTile(
                   leading: const Icon(Icons.file_open),
-                  title: const Text("Import survey"),
+                  title: const Text("Import survey file"),
                   subtitle: const Text("PPA airport .json or survey .geojson"),
                   onTap: () async {
                     final String msg = await _importSurvey();
@@ -474,6 +491,30 @@ class _PrecisionApproachScreenState extends State<PrecisionApproachScreen> {
         });
       },
     );
+  }
+
+  bool _syncing = false;
+  String _syncProgress = "";
+
+  Future<String> _syncSurveys(void Function() refresh) async {
+    if (_syncing) return "Sync already running";
+    _syncing = true;
+    _syncProgress = "airport list";
+    refresh();
+    try {
+      final (int airports, int runways) = await RunwaySurveySync.fetchAll(onProgress: (name) {
+        _syncProgress = name;
+        refresh();
+      });
+      Storage().settings.setSurveySyncMs(DateTime.now().millisecondsSinceEpoch);
+      Storage().area.update(Storage().position);
+      return "Synced $airports airport${airports == 1 ? '' : 's'}, $runways runway${runways == 1 ? '' : 's'}";
+    } catch (e) {
+      return "Sync failed: ${e.toString().replaceFirst('Exception: ', '')}";
+    } finally {
+      _syncing = false;
+      refresh();
+    }
   }
 
   Future<String> _importSurvey() async {

@@ -5,6 +5,7 @@ import 'package:avaremp/data/user_database_helper.dart';
 import 'package:avaremp/instruments/pfd_runway.dart';
 import 'package:avaremp/utils/geo_calculations.dart';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
 /// A runway whose threshold positions were measured on the ground with a
@@ -379,5 +380,70 @@ class RunwaySurveyStore {
       _byKey[r.key] = r;
     }
     change.value++;
+  }
+}
+
+
+/// Pulls every surveyed airport from the PPA community repository
+/// (github.com/perryc/ppa_airports, `airports/<prefix>/<ICAO>.json`) into the
+/// local store. Same source the PPA app uses; one unauthenticated GitHub API
+/// call for the tree, then raw downloads which are not rate limited.
+class RunwaySurveySync {
+  static const String repo = "perryc/ppa_airports";
+  static const String branch = "main";
+  static const String treeUrl = "https://api.github.com/repos/$repo/git/trees/$branch?recursive=1";
+  static const String rawBase = "https://raw.githubusercontent.com/$repo/$branch/";
+
+  /// Airport JSON paths in a GitHub tree response.
+  static List<String> airportPathsFromTree(String treeJson) {
+    final dynamic root = json.decode(treeJson);
+    if (root is! Map<String, dynamic>) return [];
+    final List<String> out = [];
+    for (final t in (root["tree"] as List? ?? [])) {
+      if (t is! Map<String, dynamic>) continue;
+      final String path = t["path"]?.toString() ?? "";
+      if (t["type"] == "blob" && path.startsWith("airports/") && path.toLowerCase().endsWith(".json")) {
+        out.add(path);
+      }
+    }
+    out.sort();
+    return out;
+  }
+
+  /// Returns (airports fetched, runways stored). Throws on network failure
+  /// with a readable message; a bad individual file is skipped.
+  static Future<(int, int)> fetchAll({http.Client? client, void Function(String)? onProgress}) async {
+    final http.Client c = client ?? http.Client();
+    try {
+      final http.Response tree = await c
+          .get(Uri.parse(treeUrl), headers: {"Accept": "application/vnd.github.v3+json"})
+          .timeout(const Duration(seconds: 20));
+      if (tree.statusCode == 403) {
+        throw Exception("GitHub rate limit reached, try again in an hour");
+      }
+      if (tree.statusCode != 200) {
+        throw Exception("GitHub returned ${tree.statusCode}");
+      }
+      final List<String> paths = airportPathsFromTree(tree.body);
+      int airports = 0, runways = 0;
+      for (final String path in paths) {
+        onProgress?.call(path.split("/").last);
+        try {
+          final http.Response r = await c.get(Uri.parse("$rawBase$path")).timeout(const Duration(seconds: 20));
+          if (r.statusCode != 200) continue;
+          final List<SurveyedRunway> rows = RunwaySurveyImporter.parse(r.body, source: "ppa_airports/$path");
+          for (final row in rows) {
+            await RunwaySurveyStore().put(row);
+            runways++;
+          }
+          airports++;
+        } catch (_) {
+          // one bad file should not stop the sync
+        }
+      }
+      return (airports, runways);
+    } finally {
+      if (client == null) c.close();
+    }
   }
 }
