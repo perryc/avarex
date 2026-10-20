@@ -3,6 +3,8 @@ import 'package:avaremp/chart/chart.dart';
 import 'package:avaremp/chart/download.dart';
 import 'package:avaremp/storage.dart';
 import 'package:avaremp/utils/app_log.dart';
+import 'package:archive/archive.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as path;
@@ -27,6 +29,14 @@ class CanadaDownload extends Download {
   // index page at download time.
   static const String _airspaceIndex =
       "http://soaringweb.org/Airspace/NA/HomePage.html";
+
+  // Transport Canada Canadian Civil Aircraft Register, refreshed daily: a
+  // zip of carscurr.txt (current aircraft), carsownr.txt, carslayout.txt.
+  // Gives registration mark, model and Mode S address for every Canadian
+  // aircraft, which labels traffic ("C-FMHP RV-10") that broadcasts no
+  // callsign - most Canadian ADS-B and all FLARM/FANET targets.
+  static const String _registryZip =
+      "https://wwwapps.tc.gc.ca/saf-sec-sur/2/ccarcs-riacc/download/ccarcsdb.zip";
 
   static const int _expiryDays = 28; // OurAirports updates nightly
 
@@ -134,11 +144,32 @@ class CanadaDownload extends Download {
         airspaceOk = false;
         AppLog.logMessage("Canada airspace download failed: $e");
       }
+      callback(chart, 45);
+
+      // register is optional too; traffic falls back to the C-F/C-G formula
+      bool registryOk = true;
+      try {
+        final File zip = File(CanadaImport.dataPath("ccarcsdb.zip"));
+        await _fetch(_registryZip, zip);
+        await compute(_extractRegistry,
+            [zip.path, CanadaImport.dataPath(CanadaImport.registryFile)]);
+        try {
+          await zip.delete();
+        } catch (_) {}
+      }
+      catch(e) {
+        if(_cancelled) {
+          rethrow;
+        }
+        registryOk = false;
+        AppLog.logMessage("Canada registry download failed: $e");
+      }
       callback(chart, 50);
 
       // 50-95: import into main.db
       await CanadaImport.importAll();
       await Storage().canadaAirspace.loadAirports();
+      await Storage().canadaRegistry.load();
       callback(chart, 95);
 
       if(airspaceOk) {
@@ -151,6 +182,7 @@ class CanadaDownload extends Download {
       final List<String> managed = [
         for(String f in csvs) path.join(CanadaImport.subDir, f),
         if(airspaceOk) path.join(CanadaImport.subDir, CanadaImport.airspaceFile),
+        if(registryOk) path.join(CanadaImport.subDir, CanadaImport.registryFile),
       ];
       await File(path.join(dataDir, filename))
           .writeAsString("$date\n${managed.join('\n')}\n");
@@ -164,6 +196,19 @@ class CanadaDownload extends Download {
     }
   }
 
+  // isolate entry: pull carscurr.txt out of the register zip
+  static void _extractRegistry(List<String> zipAndOut) {
+    final Archive archive =
+        ZipDecoder().decodeBytes(File(zipAndOut[0]).readAsBytesSync());
+    for (final ArchiveFile f in archive) {
+      if (f.name.toLowerCase().endsWith("carscurr.txt")) {
+        File(zipAndOut[1]).writeAsBytesSync(f.content as List<int>);
+        return;
+      }
+    }
+    throw Exception("carscurr.txt not in register zip");
+  }
+
   @override
   Future<void> delete(Chart chart, Function(Chart, int)? callback) async {
     try {
@@ -173,6 +218,7 @@ class CanadaDownload extends Download {
       AppLog.logMessage("Canada purge failed: $e");
     }
     Storage().canadaAirspace.clear();
+    Storage().canadaRegistry.clear();
     await super.delete(chart, callback);
   }
 }

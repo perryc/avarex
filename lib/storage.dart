@@ -57,6 +57,7 @@ import 'instruments/flight_timer.dart';
 import 'gdl90/message.dart';
 import 'package:avaremp/canada/canada_airspace.dart';
 import 'package:avaremp/canada/canada_import.dart';
+import 'package:avaremp/canada/canada_registry.dart';
 import 'utils/geojson_parser.dart';
 import 'io/gps.dart';
 import 'io/gps_kalman.dart';
@@ -127,6 +128,7 @@ class Storage {
   final DownloadManager downloadManager = DownloadManager();
   final GeoJsonParser geoParser = GeoJsonParser();
   final CanadaAirspace canadaAirspace = CanadaAirspace();
+  final CanadaRegistry canadaRegistry = CanadaRegistry();
   List<bool> activeChecklistSteps = [];
   String activeChecklistName = "";
   static const gpsSwitchoverTimeMs = 30000; // switch GPS in 30 seconds
@@ -531,7 +533,8 @@ class Storage {
       // and show the airspace/airport layers; none of this needs the network
       // or awaiting
       CanadaImport.reimportIfInstalled()
-          .then((_) => canadaAirspace.loadAirports());
+          .then((_) => canadaAirspace.loadAirports())
+          .then((_) => canadaRegistry.load());
       canadaAirspace.loadFromFile(
           CanadaImport.dataPath(CanadaImport.airspaceFile));
     }

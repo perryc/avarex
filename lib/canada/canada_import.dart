@@ -1,3 +1,4 @@
+import 'package:avaremp/canada/canada_registry.dart';
 import 'package:avaremp/data/main_database_helper.dart';
 import 'package:avaremp/storage.dart';
 import 'package:avaremp/utils/app_log.dart';
@@ -22,6 +23,7 @@ class CanadaImport {
   static const String frequenciesCsv = "airport-frequencies.csv";
   static const String navaidsCsv = "navaids.csv";
   static const String airspaceFile = "airspace.txt";
+  static const String registryFile = "carscurr.txt"; // TC civil aircraft register
 
   static String dataPath(String file) =>
       path.join(Storage().dataDir, subDir, file);
@@ -267,7 +269,15 @@ class CanadaImport {
 
     final (freqRows, ctaf, unicom) = frequencyRows(frequencies);
 
+    // Transport Canada register (optional: older downloads lack it)
+    List<Map<String, Object?>> registry = [];
+    String? registryPath = files[registryFile];
+    if (registryPath != null && File(registryPath).existsSync()) {
+      registry = CanadaRegistry.parse(File(registryPath).readAsBytesSync());
+    }
+
     return {
+      "registry": registry,
       "airports": airports
           .map((a) => airportRow(a, ctaf, unicom))
           .whereType<Map<String, Object?>>()
@@ -301,7 +311,9 @@ class CanadaImport {
       runwaysCsv: dataPath(runwaysCsv),
       frequenciesCsv: dataPath(frequenciesCsv),
       navaidsCsv: dataPath(navaidsCsv),
+      registryFile: dataPath(registryFile),
     });
+    List<Map<String, Object?>> registry = List.from(parsed["registry"]);
 
     List<Map<String, Object?>> airports = List.from(parsed["airports"]);
     List<Map<String, Object?>> runways = List.from(parsed["runways"]);
@@ -320,9 +332,18 @@ class CanadaImport {
         .map((r) => "${r['LocationID']}.${r['Type']}")
         .toSet();
 
+    // main.db ships without this table; it is recreated after every
+    // DatabasesX cycle update along with the rest of the import
+    await db.execute("create table if not exists caregistry("
+        "ICAO integer primary key, Mark text, Model text, CommonName text)");
+
     await db.transaction((txn) async {
       await _purgeTxn(txn);
       Batch batch = txn.batch();
+      for(Map<String, Object?> row in registry) {
+        batch.insert("caregistry", row,
+            conflictAlgorithm: ConflictAlgorithm.replace);
+      }
       for(Map<String, Object?> row in airports) {
         batch.insert("airports", row,
             conflictAlgorithm: ConflictAlgorithm.ignore);
@@ -350,7 +371,8 @@ class CanadaImport {
       await batch.commit(noResult: true);
     });
     AppLog.logMessage("Canada import: ${airports.length} airports, "
-        "${runways.length} runways, ${navaids.length} navaids");
+        "${runways.length} runways, ${navaids.length} navaids, "
+        "${registry.length} registered aircraft");
   }
 
   // remove all imported rows (navaids matched from the cached CSV since nav
@@ -364,6 +386,12 @@ class CanadaImport {
   }
 
   static Future<void> _purgeTxn(Transaction txn) async {
+    try {
+      await txn.delete("caregistry");
+    }
+    catch(e) {
+      // table absent on a fresh main.db
+    }
     await txn.delete("airports", where: "DLID like '$dlidPrefix%'");
     await txn.delete("airportrunways", where: "DLID like '$dlidPrefix%'");
     await txn.delete("airportfreq", where: "DLID like '$dlidPrefix%'");
@@ -391,6 +419,21 @@ class CanadaImport {
     }
     return db.rawQuery("select LocationID, FacilityName, Type, ARPLatitude, "
         "ARPLongitude from airports where DLID like '$dlidPrefix%'");
+  }
+
+  // Transport Canada register rows for the in-memory lookup
+  static Future<List<Map<String, Object?>>> getRegistry() async {
+    Database? db = await MainDatabaseHelper.db.database;
+    if(db == null) {
+      return [];
+    }
+    try {
+      return await db.query("caregistry",
+          columns: ["ICAO", "Mark", "Model", "CommonName"]);
+    }
+    catch(e) {
+      return []; // table absent: registry never imported
+    }
   }
 
   // after a DatabasesX update replaces main.db, or on startup after a failed
