@@ -196,7 +196,12 @@ class BleLink {
   // that the address sentence triggers
   String? _pendingSettings;
 
-  bool get isSoftRf => name.toLowerCase().startsWith("softrf");
+  // units that take the $PSRFA/$PSRFC configuration sentences: SoftRF
+  // (serial emulation, restarts on store) and x1-gdl90 (ADSBee service,
+  // applies live and answers on the Status characteristic)
+  bool get isSoftRf => name.toLowerCase().startsWith("softrf") ||
+      name.toLowerCase().startsWith("x1-gdl90");
+  bool _typedService = false; // connected through the ADSBee GATT service
 
   // settings replies are consumed here; everything else is receiver data
   void _onNmea(Uint8List sentence) {
@@ -227,6 +232,15 @@ class BleLink {
   // set the aircraft address (the unit stores it and restarts), then send
   // the traffic-link settings when the link comes back (second restart)
   Future<void> configureSoftRf({required int icao, required int protocol, bool mux = false}) async {
+    if(_typedService) {
+      // x1-gdl90 applies live: send both now and re-query
+      await send(SoftRfConfig.setAddress(icao, mux: mux).codeUnits);
+      await Future.delayed(const Duration(milliseconds: 300));
+      await send(SoftRfConfig.settings(protocol: protocol).codeUnits);
+      await Future.delayed(const Duration(milliseconds: 300));
+      await querySoftRf();
+      return;
+    }
     _pendingSettings = SoftRfConfig.settings(protocol: protocol);
     await send(SoftRfConfig.setAddress(icao, mux: mux).codeUnits);
     softRfInfo.value = "Address sent, unit restarting\u2026";
@@ -306,11 +320,17 @@ class BleLink {
               c.uuid == BleReceiver.adsbOwnship ||
               c.uuid == BleReceiver.adsbStatus) {
             _dataSubs.add(c.onValueReceived.listen((data) {
+              lastDataMs = DateTime.now().millisecondsSinceEpoch;
+              if(data.isNotEmpty && data[0] == 0x24) {
+                _onNmea(Uint8List.fromList(data)); // "$...": a settings reply
+                return;
+              }
               Storage().receptionLogger.onFrame(name, data);
               Storage().gdl90Buffer.put(Uint8List.fromList(data));
             }));
             await c.setNotifyValue(true);
             subscribed = true;
+            _typedService = true;
           }
           else if(c.uuid == BleReceiver.adsbUplink) {
             // FIS-B uplink frames exceed one notification; fragments carry a
