@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:avaremp/constants.dart';
 import 'package:avaremp/io/ble_receiver.dart';
 import 'package:avaremp/utils/toast.dart';
+import 'package:avaremp/io/softrf_config.dart';
 import 'package:avaremp/storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart' as fbp;
@@ -86,6 +87,56 @@ class IoScreenState extends State<IoScreen> {
     }
   }
 
+  // Push the AvareX traffic-link settings and the aircraft's own ICAO address
+  // to a connected SoftRF unit (address needs the aircraft-address firmware).
+  void _showSoftRfConfig(BuildContext context, BleLink link) {
+    final TextEditingController reg =
+        TextEditingController(text: Storage().myAircraftCallsign);
+    int protocol = SoftRfConfig.protocolFanet;
+    showDialog(context: context, builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+      final int? icao = SoftRfConfig.icaoForRegistration(reg.text);
+      final String resolved = icao == null
+          ? (reg.text.trim().isEmpty ? "Enter the registration (set in Aircraft to prefill)"
+                                     : "Not a Canadian registration the app can resolve")
+          : "ICAO ${icao.toRadixString(16).toUpperCase()}"
+            "${Storage().canadaRegistry.lookup(icao) == null ? "" : " \u00b7 ${Storage().canadaRegistry.lookup(icao)!.model}"}";
+      return AlertDialog(
+        title: Text("Configure ${link.name}"),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          TextField(
+            controller: reg,
+            decoration: const InputDecoration(labelText: "Registration", hintText: "C-FMHP"),
+            textCapitalization: TextCapitalization.characters,
+            onChanged: (_) => setState(() {}),
+          ),
+          Padding(padding: const EdgeInsets.only(top: 6, bottom: 12), child: Text(resolved)),
+          DropdownButton<int>(
+            value: protocol,
+            isExpanded: true,
+            items: [for(final e in SoftRfConfig.protocolNames.entries)
+              DropdownMenuItem(value: e.key, child: Text(e.value))],
+            onChanged: (v) => setState(() => protocol = v ?? protocol),
+          ),
+          const Padding(padding: EdgeInsets.only(top: 12), child: Text(
+            "Sets US/CA band, powered aircraft, vector alarms, full power, "
+            "NMEA + GDL90 over Bluetooth. The unit restarts and reconnects.",
+            style: TextStyle(fontSize: 12))),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          TextButton(
+            onPressed: icao == null ? null : () {
+              link.configureSoftRf(icao: icao, protocol: protocol);
+              Navigator.pop(context);
+              Toast.showToast(context, "Sent to ${link.name}", null, 3);
+            },
+            child: const Text("Apply")),
+        ],
+      );
+    }));
+  }
+
   // BLE ADS-B receivers section (works on iOS too, unlike SPP). Multiple
   // receivers can be connected at once - e.g. ADSBee for 1090ES plus a
   // SoftRF unit for FANET - and are merged into one traffic picture.
@@ -119,13 +170,23 @@ class IoScreenState extends State<IoScreen> {
                 title: Text(link.name),
                 subtitle: ValueListenableBuilder<String>(
                     valueListenable: link.status,
-                    builder: (context, s, _) => Text(s)),
-                trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline),
-                    tooltip: "Disconnect & forget",
-                    onPressed: () {
-                      Storage().bleReceiver.disconnect(link);
-                    }),
+                    builder: (context, s, _) => ValueListenableBuilder<String>(
+                        valueListenable: link.softRfInfo,
+                        builder: (context, info, _) =>
+                            Text(info.isEmpty ? s : "$s \u00b7 $info"))),
+                trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                  if(link.isSoftRf)
+                    IconButton(
+                        icon: const Icon(Icons.tune),
+                        tooltip: "Configure SoftRF for the AvareX traffic link",
+                        onPressed: () => _showSoftRfConfig(context, link)),
+                  IconButton(
+                      icon: const Icon(Icons.delete_outline),
+                      tooltip: "Disconnect & forget",
+                      onPressed: () {
+                        Storage().bleReceiver.disconnect(link);
+                      }),
+                ]),
               ),
           ])),
       ValueListenableBuilder<bool>(
