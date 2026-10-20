@@ -4,6 +4,7 @@ import 'package:avaremp/storage.dart';
 import 'package:latlong2/latlong.dart';
 
 class RMCMessage extends NmeaMessage {
+  bool valid = false; // status field: "A" data valid, "V" receiver warning (no fix)
   RMCMessage(super.type);
 
   LatLng coordinate = const LatLng(0, 0);
@@ -19,6 +20,8 @@ class RMCMessage extends NmeaMessage {
     if (tokens.length < 9) {
       return;
     }
+
+    valid = tokens[2].trim() == "A";
 
     double tmp;
     double tmp1;
