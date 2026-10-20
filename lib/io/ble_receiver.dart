@@ -37,6 +37,11 @@ class BleReceiver {
   static final Guid nusTx = Guid("6E400003-B5A3-F393-E0A9-E50E24DCCA9E"); // notify
   static final Guid nusRx = Guid("6E400002-B5A3-F393-E0A9-E50E24DCCA9E"); // write
 
+  // HM-10 style serial service (SoftRF nRF52 "serial port emulation" sends
+  // its NMEA/GDL90 stream here, not on the Nordic UART it also exposes)
+  static final Guid hm10Service = Guid("0000FFE0-0000-1000-8000-00805F9B34FB");
+  static final Guid hm10Data = Guid("0000FFE1-0000-1000-8000-00805F9B34FB"); // notify + write
+
   static bool get supported =>
       !kIsWeb && (Platform.isAndroid || Platform.isIOS || Platform.isMacOS);
 
@@ -57,7 +62,7 @@ class BleReceiver {
   // filters miss some advertisers.
   static bool isReceiver(ScanResult r) {
     for(Guid uuid in r.advertisementData.serviceUuids) {
-      if(uuid == adsbService || uuid == nusService) {
+      if(uuid == adsbService || uuid == nusService || uuid == hm10Service) {
         return true;
       }
     }
@@ -165,6 +170,12 @@ class BleLink {
         Storage().gdl90Buffer.put(frame);
       },
       (sentence) => Storage().nmeaBuffer.put(sentence));
+  late final StreamFramer _hm10Framer = StreamFramer(
+      (frame) {
+        Storage().receptionLogger.onFrame(name, frame);
+        Storage().gdl90Buffer.put(frame);
+      },
+      (sentence) => Storage().nmeaBuffer.put(sentence));
   late final UplinkReassembler _uplinkReassembler = UplinkReassembler((frame) {
     Storage().receptionLogger.onFrame(name, frame);
     Storage().gdl90Buffer.put(frame);
@@ -252,7 +263,10 @@ class BleLink {
     }
     if(!subscribed) {
       // fallback: UART byte stream; reassemble per link so frames from
-      // multiple devices never interleave mid-frame
+      // multiple devices never interleave mid-frame. A device may expose
+      // both the Nordic UART and the HM-10 service (SoftRF does, and only
+      // streams on HM-10), so subscribe to every serial characteristic
+      // found, each with its own framer.
       for(BluetoothService s in services) {
         if(s.uuid == BleReceiver.nusService) {
           for(BluetoothCharacteristic c in s.characteristics) {
@@ -262,7 +276,17 @@ class BleLink {
               subscribed = true;
             }
             else if(c.uuid == BleReceiver.nusRx) {
-              _control = c;
+              _control ??= c;
+            }
+          }
+        }
+        else if(s.uuid == BleReceiver.hm10Service) {
+          for(BluetoothCharacteristic c in s.characteristics) {
+            if(c.uuid == BleReceiver.hm10Data) {
+              _dataSubs.add(c.onValueReceived.listen(_hm10Framer.feed));
+              await c.setNotifyValue(true);
+              subscribed = true;
+              _control ??= c;
             }
           }
         }

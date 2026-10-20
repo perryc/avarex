@@ -1,8 +1,12 @@
 import 'dart:typed_data';
 
 import 'package:avaremp/nmea/nmea_ownship_message.dart';
+import 'package:avaremp/nmea/pflaa_message.dart';
+import 'package:avaremp/storage.dart';
 import 'package:avaremp/nmea/rmc_message.dart';
 import 'package:avaremp/nmea/rtm_message.dart';
+
+import 'package:avaremp/gdl90/traffic_report_message.dart';
 
 import 'gga_message.dart';
 import 'nmea_message.dart';
@@ -40,8 +44,8 @@ class NmeaMessageFactory {
     }
 
     //Check checksum
-    //Starts with $G, ends with checksum *DD
-    if(message[0] == 36 && message[1] == 71) {
+    //Starts with $G (GNSS) or $P (proprietary, e.g. FLARM $PFLAA), ends with checksum *DD
+    if(message[0] == 36 && (message[1] == 71 || message[1] == 80)) {
       int xor = checkSum(message);
 
       //Checksum is in xor data[len - 1] and data[len - 2] has checksum in Hex
@@ -69,6 +73,21 @@ class NmeaMessageFactory {
     }
     catch (e) {
       return ret;
+    }
+
+    // FLARM traffic: converted to a GDL90 traffic report and cached by the
+    // message itself; logged alongside ADS-B traffic on the status screen
+    if(data.startsWith("\$PFLAA,")) {
+      var m = PFLAAMessage(NmeaMessageType.flarmTraffic);
+      m.parse(data.trim());
+      TrafficReportMessage? t = m.traffic;
+      Storage().adsbStatus.logMessage(0x14, "FLARM traffic (\$PFLAA)",
+          t?.displayId ?? "", t?.decode() ?? "unparsed", data.trim(),
+          filter: t?.filter ?? TrafficFilter.none);
+      return m;
+    }
+    if(message[1] == 80) {
+      return ret; // other proprietary sentences ($PFLAU, $PSRF...) are not used
     }
 
     // Find which message we have
@@ -104,5 +123,6 @@ class NmeaMessageType {
   static const String recommendedMinimumSentence = "RMC";
   static const String essentialFix = "GGA";
   static const String traffic = "RTM";
+  static const String flarmTraffic = "PFLAA";
   static const String ownShip = "OwnShip";
 }
