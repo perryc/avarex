@@ -678,7 +678,7 @@ class DownloadScreenState extends State<DownloadScreen> {
       ChartCategory.canada,
       _absentColor,
       [
-        Chart('Canada (OurAirports + Airspace)', _absentColor, _absentIcon, CanadaDownload.filename, _stateAbsentNone, "", ValueNotifier<int>(0), true, CanadaDownload(), true),
+        Chart('Canada (OurAirports + Airspace + Register)', _absentColor, _absentIcon, CanadaDownload.filename, _stateAbsentNone, "", ValueNotifier<int>(0), true, CanadaDownload(), true),
       ],
       false,
     ),

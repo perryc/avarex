@@ -116,7 +116,7 @@ class Traffic {
 
   @override
   String toString() {
-    return "${message.callSign}\n${message.altitude.toInt()} ft\n"
+    return "${message.displayLabel}\n${message.altitude.toInt()} ft\n"
     "${(message.velocity * Storage().units.mpsTo).toInt()} ${Storage().settings.getUnits() == "Imperial" ? "mph" : "knots" }\n"
     "${(message.verticalSpeed * Storage().units.mToF).toInt()} fpm";
   }
@@ -497,10 +497,10 @@ class TrafficIdPainter extends AbstractCachedCustomPainter {
   final bool _isAirborne;
 
   TrafficIdPainter(final Traffic t): 
-    _trafficId = t.message.displayId,
+    _trafficId = t.message.displayLabel,
     _isAirborne = t.message.airborne,
-    super([ (t.message.displayId).hashCode, t.message.airborne ? 1 : 0 ], 
-      false, Size((t.message.displayId).length*_charPixeslWidth+24, 42));
+    super([ (t.message.displayLabel).hashCode, t.message.airborne ? 1 : 0 ], 
+      false, Size((t.message.displayLabel).length*_charPixeslWidth+24, 42));
     
   @override
   void freshPaint(ui.Canvas canvas) {
