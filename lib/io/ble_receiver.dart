@@ -181,6 +181,7 @@ class BleLink {
   // SoftRF configuration as last reported by the unit ("" until queried)
   final ValueNotifier<String> softRfInfo = ValueNotifier("");
   int? softRfAddress;
+  bool? softRfMux;
 
   bool get isSoftRf => name.toLowerCase().startsWith("softrf");
 
@@ -191,10 +192,12 @@ class BleLink {
       final int? addr = SoftRfConfig.parseAddressReply(s);
       if(addr != null) {
         softRfAddress = addr;
+        softRfMux = SoftRfConfig.parseMuxReply(s);
       }
       final String? cfg = SoftRfConfig.describeSettingsReply(s);
       final String a = softRfAddress == null ? ""
-          : "ID ${softRfAddress!.toRadixString(16).toUpperCase().padLeft(6, '0')}";
+          : "ID ${softRfAddress!.toRadixString(16).toUpperCase().padLeft(6, '0')}"
+            "${softRfMux == true ? " + 1090 mux" : ""}";
       softRfInfo.value = [a, if(cfg != null) cfg].where((e) => e.isNotEmpty).join(" \u00b7 ");
       return;
     }
@@ -209,8 +212,8 @@ class BleLink {
 
   // set the aircraft address, then the traffic-link settings; the unit
   // restarts on the settings sentence and this link auto-reconnects
-  Future<void> configureSoftRf({required int icao, required int protocol}) async {
-    await send(SoftRfConfig.setAddress(icao).codeUnits);
+  Future<void> configureSoftRf({required int icao, required int protocol, bool mux = false}) async {
+    await send(SoftRfConfig.setAddress(icao, mux: mux).codeUnits);
     await Future.delayed(const Duration(milliseconds: 500));
     await send(SoftRfConfig.settings(protocol: protocol).codeUnits);
     softRfInfo.value = "Configuring, unit restarting\u2026";

@@ -5,7 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test("sentences carry NMEA checksums", () {
-    expect(SoftRfConfig.setAddress(0xC02076), "\$PSRFA,1,C02076*17\r\n");
+    expect(SoftRfConfig.setAddress(0xC02076), startsWith("\$PSRFA,1,C02076,0*"));
+    expect(SoftRfConfig.setAddress(0xC02076, mux: true), startsWith("\$PSRFA,1,C02076,1*"));
     expect(SoftRfConfig.queryAddress(), "\$PSRFA,?*45\r\n");
     final String s = SoftRfConfig.settings();
     expect(s, startsWith("\$PSRFC,1,0,5,2,8,2,0,0,2,1,0,1,0,5,5,0,0,0,0*"));
@@ -15,6 +16,9 @@ void main() {
 
   test("replies parse", () {
     expect(SoftRfConfig.parseAddressReply("\$PSRFA,1,C02076*17"), 0xC02076);
+    expect(SoftRfConfig.parseAddressReply("\$PSRFA,1,C02076,1*3A"), 0xC02076);
+    expect(SoftRfConfig.parseMuxReply("\$PSRFA,1,C02076,1*3A"), isTrue);
+    expect(SoftRfConfig.parseMuxReply("\$PSRFA,1,C02076*17"), isNull);
     expect(SoftRfConfig.parseAddressReply("\$PSRFC,1,0*00"), isNull);
     expect(SoftRfConfig.describeSettingsReply("\$PSRFC,1,0,5,2,8,2,0,0,2,1,0,1,0,5,5,0,0,0,0*1A"),
         "FANET, US/CA, full power, GDL90 over BT");

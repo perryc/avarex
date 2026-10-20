@@ -93,6 +93,7 @@ class IoScreenState extends State<IoScreen> {
     final TextEditingController reg =
         TextEditingController(text: Storage().myAircraftCallsign);
     int protocol = SoftRfConfig.protocolFanet;
+    bool mux = false;
     showDialog(context: context, builder: (context) => StatefulBuilder(
         builder: (context, setState) {
       final int? icao = SoftRfConfig.icaoForRegistration(reg.text);
@@ -116,7 +117,21 @@ class IoScreenState extends State<IoScreen> {
             isExpanded: true,
             items: [for(final e in SoftRfConfig.protocolNames.entries)
               DropdownMenuItem(value: e.key, child: Text(e.value))],
-            onChanged: (v) => setState(() => protocol = v ?? protocol),
+            onChanged: (v) => setState(() {
+              protocol = v ?? protocol;
+              if(protocol != SoftRfConfig.protocolFanet) {
+                mux = false; // mux needs FANET as the beacon protocol
+              }
+            }),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text("Also receive 1090 ADS-B (mux)"),
+            subtitle: const Text("Alternates the radio between FANET and 1090; slower updates on both"),
+            value: mux,
+            onChanged: protocol == SoftRfConfig.protocolFanet
+                ? (v) => setState(() => mux = v) : null,
           ),
           const Padding(padding: EdgeInsets.only(top: 12), child: Text(
             "Sets US/CA band, powered aircraft, vector alarms, full power, "
@@ -127,7 +142,7 @@ class IoScreenState extends State<IoScreen> {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
           TextButton(
             onPressed: icao == null ? null : () {
-              link.configureSoftRf(icao: icao, protocol: protocol);
+              link.configureSoftRf(icao: icao, protocol: protocol, mux: mux);
               Navigator.pop(context);
               Toast.showToast(context, "Sent to ${link.name}", null, 3);
             },
