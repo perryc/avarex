@@ -35,9 +35,10 @@ class SoftRfConfig {
     return "\$$body*${sum.toRadixString(16).toUpperCase().padLeft(2, '0')}\r\n";
   }
 
-  /// Set the 24-bit ICAO address (0 reverts the unit to its chip-derived ID).
-  static String setAddress(int icao) =>
-      sentence("PSRFA,1,${(icao & 0xFFFFFF).toRadixString(16).toUpperCase().padLeft(6, '0')}");
+  /// Set the 24-bit ICAO address (0 reverts the unit to its chip-derived ID)
+  /// and the FANET/1090ES receive mux flag (LR2021 units on FANET only).
+  static String setAddress(int icao, {bool mux = false}) =>
+      sentence("PSRFA,1,${(icao & 0xFFFFFF).toRadixString(16).toUpperCase().padLeft(6, '0')},${mux ? 1 : 0}");
 
   static String queryAddress() => sentence("PSRFA,?");
   static String querySettings() => sentence("PSRFC,?");
@@ -71,10 +72,16 @@ class SoftRfConfig {
   static int? icaoForRegistration(String registration) =>
       Storage().canadaRegistry.lookupMark(registration);
 
-  /// Parsed `$PSRFA,1,hhhhhh` reply, or null.
+  /// Parsed `$PSRFA,1,hhhhhh[,mux]` reply, or null.
   static int? parseAddressReply(String nmea) {
-    final RegExpMatch? m = RegExp(r'^\$PSRFA,1,([0-9A-Fa-f]{6})\*').firstMatch(nmea.trim());
+    final RegExpMatch? m = RegExp(r'^\$PSRFA,1,([0-9A-Fa-f]{6})(?:,|\*)').firstMatch(nmea.trim());
     return m == null ? null : int.parse(m.group(1)!, radix: 16);
+  }
+
+  /// Mux flag from a `$PSRFA,1,hhhhhh,m` reply; null when absent (older firmware).
+  static bool? parseMuxReply(String nmea) {
+    final RegExpMatch? m = RegExp(r'^\$PSRFA,1,[0-9A-Fa-f]{6},([01])\*').firstMatch(nmea.trim());
+    return m == null ? null : m.group(1) == "1";
   }
 
   /// Human summary of a "$PSRFC,1,..." reply ("FANET, US/CA, GDL90 BT"), or null.
