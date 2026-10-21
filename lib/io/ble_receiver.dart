@@ -70,7 +70,7 @@ class BleReceiver {
     String name = r.advertisementData.advName.isNotEmpty
         ? r.advertisementData.advName
         : r.device.platformName;
-    return RegExp(r'adsbee|softrf|stratux', caseSensitive: false).hasMatch(name);
+    return RegExp(r'adsbee|softrf|stratux|x1-gdl90', caseSensitive: false).hasMatch(name);
   }
 
   // scan for ADS-B receivers; results stream in FlutterBluePlus.scanResults,
