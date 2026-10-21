@@ -70,7 +70,7 @@ class BleReceiver {
     String name = r.advertisementData.advName.isNotEmpty
         ? r.advertisementData.advName
         : r.device.platformName;
-    return RegExp(r'adsbee|softrf|stratux|x1-gdl90', caseSensitive: false).hasMatch(name);
+    return RegExp(r'adsbee|softrf|stratux|x1-gdl90|cb-tfc', caseSensitive: false).hasMatch(name);
   }
 
   // scan for ADS-B receivers; results stream in FlutterBluePlus.scanResults,
@@ -200,7 +200,8 @@ class BleLink {
   // (serial emulation, restarts on store) and x1-gdl90 (ADSBee service,
   // applies live and answers on the Status characteristic)
   bool get isSoftRf => name.toLowerCase().startsWith("softrf") ||
-      name.toLowerCase().startsWith("x1-gdl90");
+      name.toLowerCase().startsWith("x1-gdl90") ||
+      name.toLowerCase().startsWith("cb-tfc");
   bool _typedService = false; // connected through the ADSBee GATT service
 
   // settings replies are consumed here; everything else is receiver data
