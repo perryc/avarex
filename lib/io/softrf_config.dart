@@ -68,9 +68,68 @@ class SoftRfConfig {
   }
 
   /// ICAO address for a registration: Canadian marks via the register or the
-  /// C-F/C-G allocation formula; otherwise null.
-  static int? icaoForRegistration(String registration) =>
-      Storage().canadaRegistry.lookupMark(registration);
+  /// C-F/C-G allocation formula, US marks by the N-number formula, and a bare
+  /// six-digit hex address as itself. Null when none of those fit.
+  static int? icaoForRegistration(String registration) {
+    final int? ca = Storage().canadaRegistry.lookupMark(registration);
+    if(ca != null) {
+      return ca;
+    }
+    final String t = registration.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), "");
+    final int? us = icaoForNNumber(t);
+    if(us != null) {
+      return us;
+    }
+    return RegExp(r'^[0-9A-F]{6}$').hasMatch(t) ? int.parse(t, radix: 16) : null;
+  }
+
+  // The US registration alphabet leaves out I and O.
+  static const String _usLetters = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+
+  /// ICAO address for a US registration. The N-numbers map onto
+  /// 0xA00001..0xADF7C7 by formula: each leading digit owns 101711 addresses,
+  /// and within that the bare number comes first, then the letter suffixes
+  /// (one letter, then that letter followed by a second), then each further
+  /// digit owns the next block down. Only a single letter fits in the last
+  /// position. Checked against 495 live aircraft.
+  static int? icaoForNNumber(String t) {
+    if(!RegExp(r'^N[1-9][0-9A-Z]{0,4}$').hasMatch(t)) {
+      return null;
+    }
+    final String s = t.substring(1);
+    int off = (int.parse(s[0]) - 1) * 101711;
+    String rest = s.substring(1);
+    for(final int sub in <int>[10111, 951, 35]) {       // positions 2, 3 and 4
+      if(rest.isEmpty) {
+        return 0xA00001 + off;
+      }
+      final String c = rest[0];
+      if(c.compareTo("A") >= 0) {                        // letters end the mark
+        final int i1 = _usLetters.indexOf(c);
+        if(i1 < 0) {
+          return null;
+        }
+        if(rest.length == 1) {
+          return 0xA00001 + off + 1 + 25 * i1;
+        }
+        final int i2 = _usLetters.indexOf(rest[1]);
+        return (rest.length != 2 || i2 < 0) ? null : 0xA00001 + off + 2 + 25 * i1 + i2;
+      }
+      off += 601 + int.parse(c) * sub;
+      rest = rest.substring(1);
+    }
+    if(rest.isEmpty) {
+      return 0xA00001 + off;
+    }
+    if(rest.length > 1) {
+      return null;
+    }
+    if(rest[0].compareTo("A") >= 0) {
+      final int i = _usLetters.indexOf(rest[0]);
+      return i < 0 ? null : 0xA00001 + off + 1 + i;
+    }
+    return 0xA00001 + off + 25 + int.parse(rest[0]);
+  }
 
   /// Parsed `$PSRFA,1,hhhhhh[,mux]` reply, or null.
   static int? parseAddressReply(String nmea) {

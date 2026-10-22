@@ -99,7 +99,7 @@ class IoScreenState extends State<IoScreen> {
       final int? icao = SoftRfConfig.icaoForRegistration(reg.text);
       final String resolved = icao == null
           ? (reg.text.trim().isEmpty ? "Enter the registration (set in Aircraft to prefill)"
-                                     : "Not a Canadian registration the app can resolve")
+                                     : "Unknown mark; enter the six-digit ICAO address instead")
           : "ICAO ${icao.toRadixString(16).toUpperCase()}"
             "${Storage().canadaRegistry.lookup(icao) == null ? "" : " \u00b7 ${Storage().canadaRegistry.lookup(icao)!.model}"}";
       return AlertDialog(
@@ -107,7 +107,7 @@ class IoScreenState extends State<IoScreen> {
         content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           TextField(
             controller: reg,
-            decoration: const InputDecoration(labelText: "Registration", hintText: "C-FMHP"),
+            decoration: const InputDecoration(labelText: "Registration", hintText: "C-FMHP or N12345"),
             textCapitalization: TextCapitalization.characters,
             onChanged: (_) => setState(() {}),
           ),
