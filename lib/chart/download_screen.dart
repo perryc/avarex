@@ -530,7 +530,9 @@ class DownloadScreenState extends State<DownloadScreen> {
   Future<void> _getChartStateFromLocal(Chart chart) async {
     String cycle = await Download.getChartCycleLocal(chart);
     bool expired = await Download.isChartExpired(chart);
-    String range = FaaDates.getVersionRange(cycle);
+    // Canada versions are download dates, not FAA cycles
+    String version = chart.download is CanadaDownload
+        ? "Downloaded $cycle" : "$cycle ${FaaDates.getVersionRange(cycle)}";
     setState(() {
       if(cycle.isEmpty) {
         chart.state = _stateAbsentNone;
@@ -538,11 +540,11 @@ class DownloadScreenState extends State<DownloadScreen> {
       }
       else if(expired) {
         chart.state = _stateExpiredNone;
-        chart.subtitle = "$cycle $range";
+        chart.subtitle = "$version \u00b7 expired";
       }
       else {
         chart.state = _stateCurrentNone;
-        chart.subtitle = "$cycle $range";
+        chart.subtitle = version;
       }
       _updateChart(chart);
       _updateCategory();
@@ -608,6 +610,9 @@ class DownloadScreenState extends State<DownloadScreen> {
             ct.state == _stateCurrentDownload) {
           Storage().downloadManager.download(ct, _nextCycle, _backupServer);
         }
+        if (ct.state == _stateExpiredDownload) {
+          _refresh(ct);
+        }
         if (ct.state == _stateCurrentDelete ||
             ct.state == _stateExpiredDelete) {
           Storage().downloadManager.delete(ct);
@@ -620,6 +625,16 @@ class DownloadScreenState extends State<DownloadScreen> {
     else {
       Toast.showToast(context, "Downloading ${Storage().downloadManager.total()} items", null, 3);
     }
+  }
+
+  // replace expired data with a fresh download
+  void _refresh(Chart ct) {
+    // the Canada import purges its old rows itself; a separate delete would
+    // race the download and remove the files it is writing
+    if(ct.download is! CanadaDownload) {
+      Storage().downloadManager.deleteSilent(ct);
+    }
+    Storage().downloadManager.download(ct, _nextCycle, _backupServer);
   }
 
   void _update() async {
@@ -638,8 +653,7 @@ class DownloadScreenState extends State<DownloadScreen> {
         if (ct.state == _stateExpiredNone ||
             ct.state == _stateExpiredDownload ||
             ct.state == _stateExpiredDelete) {
-          Storage().downloadManager.deleteSilent(ct);
-          Storage().downloadManager.download(ct, _nextCycle, _backupServer);
+          _refresh(ct);
           updateCount++;
         }
       }
