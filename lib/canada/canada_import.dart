@@ -25,6 +25,11 @@ class CanadaImport {
   static const String airspaceFile = "airspace.txt";
   static const String registryFile = "carscurr.txt"; // TC civil aircraft register
 
+  // bump when importAll output changes so installs re-import from the cached
+  // CSVs at startup. 2: re-imports kept airports but dropped their runways,
+  // frequencies and navaids.
+  static const int importVersion = 2;
+
   static String dataPath(String file) =>
       path.join(Storage().dataDir, subDir, file);
 
@@ -320,25 +325,26 @@ class CanadaImport {
     List<Map<String, Object?>> frequencies = List.from(parsed["frequencies"]);
     List<Map<String, Object?>> navaids = List.from(parsed["navaids"]);
 
-    // main.db ships some Canadian airports (State='CN') and navaids from FAA
-    // data; those stay authoritative. airports has UNIQUE(LocationID) so
-    // INSERT OR IGNORE skips them, but skip their child rows explicitly.
-    Set<String> existing = (await db.query("airports", columns: ["LocationID"]))
-        .map((r) => r["LocationID"] as String)
-        .toSet();
-    List<Map<String, Object?>> existingNavs =
-        await db.query("nav", columns: ["LocationID", "Type", "ARPLatitude"]);
-    Set<String> existingNavKeys = existingNavs
-        .map((r) => "${r['LocationID']}.${r['Type']}")
-        .toSet();
-
     // main.db ships without this table; it is recreated after every
     // DatabasesX cycle update along with the rest of the import
     await db.execute("create table if not exists caregistry("
         "ICAO integer primary key, Mark text, Model text, CommonName text)");
+    await db.execute("create table if not exists caimport(Version integer)");
 
     await db.transaction((txn) async {
       await _purgeTxn(txn);
+
+      // main.db ships some Canadian airports (State='CN') and navaids from
+      // FAA data; those stay authoritative. airports has UNIQUE(LocationID)
+      // so INSERT OR IGNORE skips them, but skip their child rows explicitly.
+      // Read after the purge so a previous import does not count as FAA data.
+      Set<String> existing = (await txn.query("airports", columns: ["LocationID"]))
+          .map((r) => r["LocationID"] as String)
+          .toSet();
+      Set<String> existingNavKeys = (await txn.query("nav", columns: ["LocationID", "Type"]))
+          .map((r) => "${r['LocationID']}.${r['Type']}")
+          .toSet();
+
       Batch batch = txn.batch();
       for(Map<String, Object?> row in registry) {
         batch.insert("caregistry", row,
@@ -368,6 +374,7 @@ class CanadaImport {
           batch.insert("nav", row);
         }
       }
+      batch.insert("caimport", {"Version": importVersion}); // purged above
       await batch.commit(noResult: true);
     });
     AppLog.logMessage("Canada import: ${airports.length} airports, "
@@ -388,9 +395,10 @@ class CanadaImport {
   static Future<void> _purgeTxn(Transaction txn) async {
     try {
       await txn.delete("caregistry");
+      await txn.delete("caimport");
     }
     catch(e) {
-      // table absent on a fresh main.db
+      // tables absent on a fresh main.db
     }
     await txn.delete("airports", where: "DLID like '$dlidPrefix%'");
     await txn.delete("airportrunways", where: "DLID like '$dlidPrefix%'");
@@ -436,6 +444,18 @@ class CanadaImport {
     }
   }
 
+  // importer version that populated main.db, 0 if none (fresh main.db, or
+  // an import from before the version was recorded)
+  static Future<int> _importedVersion(Database db) async {
+    try {
+      List<Map<String, Object?>> rows = await db.query("caimport");
+      return rows.isEmpty ? 0 : rows.first["Version"] as int;
+    }
+    catch(e) {
+      return 0; // table absent
+    }
+  }
+
   // after a DatabasesX update replaces main.db, or on startup after a failed
   // import, restore Canadian rows from the cached CSVs (no network needed)
   static Future<void> reimportIfInstalled() async {
@@ -447,10 +467,8 @@ class CanadaImport {
       if(db == null) {
         return;
       }
-      List<Map<String, Object?>> count = await db.rawQuery(
-          "select count(*) as c from airports where DLID like '$dlidPrefix%'");
-      if((count[0]["c"] as int) > 0) {
-        return; // still populated
+      if(await _importedVersion(db) >= importVersion) {
+        return; // still populated by the current importer
       }
       await importAll();
     }
