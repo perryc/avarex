@@ -31,8 +31,20 @@ void main() {
     expect(SoftRfConfig.icaoForRegistration("c-iaa"), 0xC01521);
     expect(SoftRfConfig.icaoForRegistration("CFMHP"), 0xC02076); // formula
     expect(SoftRfConfig.icaoForRegistration("C-GZZZ"), 0xC00001 + 35151);
-    expect(SoftRfConfig.icaoForRegistration("N12345"), isNull);
+    expect(SoftRfConfig.icaoForRegistration("N12345"), 0xA061D9); // US formula
+    expect(SoftRfConfig.icaoForRegistration("A12DB5"), 0xA12DB5); // bare address
+    expect(SoftRfConfig.icaoForRegistration("G-ABCD"), isNull);   // no formula
     expect(SoftRfConfig.icaoForRegistration(""), isNull);
     Storage().canadaRegistry.clear();
+  });
+  test('N-numbers resolve to ICAO addresses', () {
+    expect(SoftRfConfig.icaoForNNumber("N1"), 0xA00001);
+    expect(SoftRfConfig.icaoForNNumber("N101NN"), 0xA009A4);
+    expect(SoftRfConfig.icaoForNNumber("N1049A"), 0xA01724);
+    expect(SoftRfConfig.icaoForNNumber("N105GC"), 0xA017E0);
+    expect(SoftRfConfig.icaoForNNumber("N987JT"), 0xADC5FF);
+    expect(SoftRfConfig.icaoForNNumber("N96FF"), 0xAD5A50);
+    expect(SoftRfConfig.icaoForNNumber("N0ABC"), isNull);
+    expect(SoftRfConfig.icaoForNNumber("N1IAB"), isNull);
   });
 }
