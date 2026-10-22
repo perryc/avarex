@@ -540,7 +540,7 @@ class DownloadScreenState extends State<DownloadScreen> {
       }
       else if(expired) {
         chart.state = _stateExpiredNone;
-        chart.subtitle = "$cycle $range";
+        chart.subtitle = "$cycle $range \u00b7 expired";
       }
       else {
         chart.state = _stateCurrentNone;
@@ -610,6 +610,9 @@ class DownloadScreenState extends State<DownloadScreen> {
             ct.state == _stateCurrentDownload) {
           Storage().downloadManager.download(ct, _nextCycle, _backupServer);
         }
+        if (ct.state == _stateExpiredDownload) {
+          _refresh(ct);
+        }
         if (ct.state == _stateCurrentDelete ||
             ct.state == _stateExpiredDelete) {
           Storage().downloadManager.delete(ct);
@@ -622,6 +625,12 @@ class DownloadScreenState extends State<DownloadScreen> {
     else {
       Toast.showToast(context, "Downloading ${Storage().downloadManager.total()} items", null, 3);
     }
+  }
+
+  // replace expired data with a fresh download
+  void _refresh(Chart ct) {
+    Storage().downloadManager.deleteSilent(ct);
+    Storage().downloadManager.download(ct, _nextCycle, _backupServer);
   }
 
   void _update() async {
@@ -640,8 +649,7 @@ class DownloadScreenState extends State<DownloadScreen> {
         if (ct.state == _stateExpiredNone ||
             ct.state == _stateExpiredDownload ||
             ct.state == _stateExpiredDelete) {
-          Storage().downloadManager.deleteSilent(ct);
-          Storage().downloadManager.download(ct, _nextCycle, _backupServer);
+          _refresh(ct);
           updateCount++;
         }
       }
