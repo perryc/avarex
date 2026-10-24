@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Runway review</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<style>
+  :root {
+    --bg:#13161a; --panel:#1b2026; --line:#2d343c; --ink:#eef1f4; --ink2:#aab3bd;
+    --ink3:#7f8a95; --ok:#3fae63; --no:#d24b4b; --edit:#e0a33c; --orig:#6aa0e0;
+  }
+  * { box-sizing:border-box; }
+  html,body { height:100%; margin:0; }
+  body { display:flex; background:var(--bg); color:var(--ink);
+         font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  #map { flex:1; min-width:0; }
+  aside { width:330px; border-left:1px solid var(--line); background:var(--panel);
+          display:flex; flex-direction:column; overflow-y:auto; }
+  header { padding:12px 14px; border-bottom:1px solid var(--line); }
+  .code { font-size:21px; font-weight:650; letter-spacing:.01em; }
+  .name { color:var(--ink2); font-size:13px; }
+  .prog { color:var(--ink3); font-size:12px; font-variant-numeric:tabular-nums; margin-top:3px; }
+  section { padding:12px 14px; border-bottom:1px solid var(--line); }
+  h2 { margin:0 0 8px; font-size:11px; letter-spacing:.09em; text-transform:uppercase;
+       color:var(--ink3); font-weight:650; }
+  .rows { display:grid; grid-template-columns:auto 1fr; gap:4px 12px; font-variant-numeric:tabular-nums; }
+  .rows div:nth-child(odd) { color:var(--ink3); }
+  .big { font-size:17px; font-weight:650; }
+  label { display:block; margin-bottom:8px; font-size:12px; color:var(--ink3); }
+  input,select { width:100%; margin-top:3px; padding:5px 7px; border-radius:4px;
+                 border:1px solid var(--line); background:#121619; color:var(--ink);
+                 font:inherit; font-variant-numeric:tabular-nums; }
+  .pair { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .note { color:var(--ink3); font-size:12px; }
+  .warn { color:var(--edit); font-size:12px; margin-top:6px; }
+  .acts { padding:12px 14px; display:grid; gap:8px; position:sticky; bottom:0;
+          background:var(--panel); border-top:1px solid var(--line); }
+  button { padding:9px 12px; border-radius:5px; border:1px solid var(--line);
+           background:#222930; color:var(--ink); font:inherit; font-weight:600; cursor:pointer; }
+  button:hover { background:#2b333b; }
+  button.ok { background:var(--ok); border-color:var(--ok); color:#07130b; }
+  button.no { background:var(--no); border-color:var(--no); color:#1b0606; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .legend { display:flex; gap:14px; font-size:12px; color:var(--ink3); margin-top:6px; }
+  .sw { display:inline-block; width:14px; height:3px; vertical-align:middle; margin-right:5px; }
+  a { color:#7fb2ef; }
+  .done { padding:28px 20px; text-align:center; color:var(--ink2); }
+  .done code { background:#121619; padding:1px 5px; border-radius:3px; }
+  #toast { position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(14px);
+           background:var(--ok); color:#07130b; font-weight:650; padding:10px 18px;
+           border-radius:6px; opacity:0; pointer-events:none; transition:opacity .18s, transform .18s;
+           z-index:1000; }
+  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  button:disabled { opacity:.5; cursor:default; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<aside id="panel"><div class="done">loading…</div></aside>
+
+<script>
+const R = 6371000, D2R = Math.PI/180;
+const dist = (a,b) => { // metres
+  const x = (0.5 - Math.cos((b[0]-a[0])*D2R)/2
+            + Math.cos(a[0]*D2R)*Math.cos(b[0]*D2R)*(1-Math.cos((b[1]-a[1])*D2R))/2);
+  return R*2*Math.asin(Math.sqrt(x));
+};
+const brg = (a,b) => { // true degrees
+  const y = Math.sin((b[1]-a[1])*D2R)*Math.cos(b[0]*D2R);
+  const x = Math.cos(a[0]*D2R)*Math.sin(b[0]*D2R)
+          - Math.sin(a[0]*D2R)*Math.cos(b[0]*D2R)*Math.cos((b[1]-a[1])*D2R);
+  return (Math.atan2(y,x)/D2R + 360) % 360;
+};
+// Runway numbers are magnetic. The server sends this airport's variation (east
+// positive) from the same WMM the populate tool uses.
+const idents = (trueHdg, variation) => {
+  const mag = ((trueHdg - variation) % 360 + 360) % 360;
+  const n = Math.round(mag/10) % 36 || 36;
+  const pad = v => String(v).padStart(2,"0");
+  return [pad(n), pad((n + 18 - 1) % 36 + 1), mag];
+};
+// Offset a point by metres along a true bearing (for drawing runway edges).
+const offset = (p, m, hdg) => {
+  const dLat = (m*Math.cos(hdg*D2R)) / 111320;
+  const dLon = (m*Math.sin(hdg*D2R)) / (111320*Math.cos(p[0]*D2R));
+  return [p[0]+dLat, p[1]+dLon];
+};
+
+let jobs = [], ji = 0, ri = 0, le = null, he = null, edited = false;
+let origLine = null, line = null, box = null, mLe = null, mHe = null;
+
+const map = L.map("map", { zoomControl:true, attributionControl:true });
+L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  { maxZoom:19, maxNativeZoom:18,
+    attribution:"Imagery &copy; Esri, Maxar, Earthstar Geographics" }).addTo(map);
+
+const panel = document.getElementById("panel");
+const job = () => jobs[ji];
+const rwy = () => job().runways[ri];
+
+function clearLayers(){ for (const l of [origLine,line,box,mLe,mHe]) if (l) map.removeLayer(l); }
+
+function endpointIcon(label, color){
+  return L.divIcon({ className:"", iconSize:[30,30], iconAnchor:[15,15],
+    html:`<div style="width:30px;height:30px;border-radius:50%;border:2px solid ${color};
+      background:rgba(0,0,0,.45);color:#fff;font:600 12px system-ui;display:flex;
+      align-items:center;justify-content:center;cursor:grab">${label}</div>` });
+}
+
+function draw(){
+  clearLayers();
+  const j = job(), r = rwy();
+  if (!r) { map.setView([j.lat,j.lon], 15); return; }
+  const [a,b] = [le,he];
+  const len = dist(a,b), hdg = brg(a,b);
+  const [li,hi] = idents(hdg, j.variation);
+  const w = parseFloat(document.getElementById("width")?.value) || 0;
+  const halfW = (w ? w*0.3048 : 18) / 2;
+
+  if (r._origLe) origLine = L.polyline([r._origLe, r._origHe],
+    { color:"var(--orig)", weight:2, opacity:.55, dashArray:"5 6" }).addTo(map);
+  box = L.polygon([offset(a,halfW,hdg+90), offset(b,halfW,hdg+90),
+                   offset(b,halfW,hdg-90), offset(a,halfW,hdg-90)],
+    { color:"#f0c44c", weight:1, opacity:.85, fillColor:"#f0c44c", fillOpacity:.14 }).addTo(map);
+  line = L.polyline([a,b], { color:"#f0c44c", weight:2 }).addTo(map);
+  mLe = L.marker(a, { draggable:true, icon:endpointIcon(li,"#f0c44c") }).addTo(map);
+  mHe = L.marker(b, { draggable:true, icon:endpointIcon(hi,"#f0c44c") }).addTo(map);
+  const onDrag = (which) => (e) => {
+    const p = e.target.getLatLng();
+    if (which==="le") le=[p.lat,p.lng]; else he=[p.lat,p.lng];
+    edited = true; draw(); render(true);
+  };
+  mLe.on("drag", onDrag("le")); mHe.on("drag", onDrag("he"));
+  mLe.on("dragend", ()=>render()); mHe.on("dragend", ()=>render());
+}
+
+function fit(){
+  const r = rwy();
+  if (!r) return;
+  map.fitBounds(L.latLngBounds([le,he]).pad(0.9), { maxZoom:17 });
+}
+
+function render(keepMap){
+  const j = job(), r = rwy();
+  if (!r){
+    panel.innerHTML = `<header><div class="code">${j.code}</div>
+      <div class="name">${j.name}</div>
+      <div class="prog">airport ${ji+1} of ${jobs.length} · no runway proposal</div></header>
+      <section><p class="note">No geometry could be derived for this field, so there is
+      nothing to verify against the imagery. Trace it by hand on OurAirports if you can
+      see a strip below.</p>
+      <p class="note"><a href="${j.oa_url}" target="_blank" rel="noopener">open on OurAirports</a></p>
+      </section>
+      <div class="acts"><button onclick="decide('skip')">Skip</button></div>`;
+    return;
+  }
+  const len = dist(le,he), hdg = brg(le,he);
+  const [li,hi,mag] = idents(hdg, j.variation);
+  const changed = Math.round(dist(le, r._origLe) + dist(he, r._origHe));
+  panel.innerHTML = `
+  <header>
+    <div class="code">${j.code}</div>
+    <div class="name">${j.name}</div>
+    <div class="prog">airport ${ji+1} of ${jobs.length}${j.runways.length>1
+      ? ` · runway ${ri+1} of ${j.runways.length}` : ""} · missing ${j.missing.join(", ")}</div>
+  </header>
+  <section>
+    <h2>Measured from the ends you placed</h2>
+    <div class="rows">
+      <div>Runway</div><div class="big">${li}/${hi}</div>
+      <div>Length</div><div class="big">${Math.round(len*3.28084)} ft<span class="note"> (${Math.round(len)} m)</span></div>
+      <div>Heading</div><div>${hdg.toFixed(0)}&deg;T &rarr; ${mag.toFixed(0)}&deg;M</div>
+      <div>Variation</div><div>${j.variation>=0?"+":""}${j.variation.toFixed(1)}&deg; (WMM)</div>
+    </div>
+    ${changed > 5
+      ? `<div class="warn">moved ${changed} m from the proposal &mdash; this is now your measurement</div>`
+      : `<div class="note">unmoved &mdash; accepting credits the original source</div>`}
+    <div class="legend">
+      <span><span class="sw" style="background:#f0c44c"></span>yours</span>
+      ${r._origLe ? `<span><span class="sw" style="background:#6aa0e0"></span>proposal</span>` : ""}
+    </div>
+  </section>
+  <section>
+    <h2>Attributes</h2>
+    <div class="pair">
+      <label>Width (ft)<input id="width" type="number" min="0" step="1" value="${r.width_ft||""}"
+        oninput="rwy().width_ft=this.value;edited=true;draw()"></label>
+      <label>Surface<select id="surface" onchange="rwy().surface=this.value;edited=true">
+        ${["","ASP","CON","TURF","GRE","GRAVEL","DIRT","SAND","WATER","SNOW","ICE"]
+          .map(s=>`<option value="${s}"${(r.surface||"")===s?" selected":""}>${s||"(unknown)"}</option>`).join("")}
+      </select></label>
+    </div>
+    <label><input id="lighted" type="checkbox" style="width:auto;margin-right:7px"
+      ${r.lighted==="1"?"checked":""} onchange="rwy().lighted=this.checked?'1':'0';edited=true"> Lighted</label>
+    ${r._srcWidth && r.width_ft !== r._srcWidth
+      ? `<div class="warn">width changed from ${r._srcWidth} ft in the source &mdash;
+         <a href="#" onclick="rwy().width_ft=rwy()._srcWidth;render();draw();return false">restore</a></div>`
+      : ""}
+  </section>
+  <section>
+    <h2>Radio</h2>
+    <label>CTAF / ATF (MHz)
+      <input id="ctaf" type="text" inputmode="decimal" placeholder="blank if you don't know"
+             value="${j.ctaf || ""}" oninput="job().ctaf=this.value">
+    </label>
+    <div class="note">123.2 is Canada's default for uncontrolled aerodromes, so it is right
+      more often than not &mdash; which is exactly why it should not be filled in for you.
+      <a href="#" onclick="job().ctaf='123.2';render();return false">use 123.2</a>
+      &middot; <a href="#" onclick="job().ctaf='';render();return false">clear</a></div>
+    <div class="note" style="margin-top:4px">Enter only what you know first-hand or can
+      vouch for. A blank is better than a wrong frequency.</div>
+  </section>
+  <section>
+    <h2>Provenance</h2>
+    <p class="note">${r.note||"no source note"}</p>
+    <p class="note"><a href="${j.oa_url}" target="_blank" rel="noopener">open on OurAirports</a></p>
+  </section>
+  <div class="acts">
+    <button class="ok" onclick="decide('accept')">Accept${changed>5?" my measurement":""}</button>
+    <div class="row2">
+      <button onclick="resetRwy()">Reset</button>
+      <button class="no" onclick="decide('reject')">Reject</button>
+    </div>
+    <button onclick="decide('skip')">Skip</button>
+  </div>`;
+  if (!keepMap) { /* panel only */ }
+}
+
+function resetRwy(){
+  const r = rwy();
+  le = r._origLe.slice(); he = r._origHe.slice(); edited = false;
+  if (r._srcWidth !== undefined) r.width_ft = r._srcWidth;
+  draw(); render(); fit();
+}
+
+function loadRwy(){
+  const j = job(), r = rwy();
+  edited = false;
+  if (r){
+    le = r._origLe.slice(); he = r._origHe.slice();
+    draw(); render(); fit();
+  } else {
+    clearLayers(); map.setView([j.lat,j.lon], 15); render();
+  }
+}
+
+let busy = false;
+
+// How far the operator actually moved the ends, in metres. Provenance is derived from
+// THIS, never from the `edited` flag - changing a surface dropdown must not make the
+// file claim the geometry was measured against imagery.
+function movedMetres(){
+  const r = rwy();
+  if (!r) return 0;
+  return dist(le, r._origLe) + dist(he, r._origHe);
+}
+
+async function decide(kind){
+  if (busy) return;                       // one decision per click
+  busy = true;
+  document.querySelectorAll(".acts button").forEach(b => b.disabled = true);
+  const j = job(), r = rwy();
+  const moved = Math.round(movedMetres());
+  const ctafEl = document.getElementById("ctaf");
+  if (ctafEl) j.ctaf = ctafEl.value.trim();
+  const body = { code:j.code, ident:j.ident, name:j.name, decision:kind,
+                 edited, moved_m: moved, ctaf: j.ctaf || "" };
+  if (r && kind === "accept"){
+    const len = dist(le,he), hdg = brg(le,he);
+    const [li,hi] = idents(hdg, j.variation);
+    body.runway = {
+      le_ident:li, he_ident:hi,
+      length_ft:String(Math.round(len*3.28084)),
+      width_ft:document.getElementById("width").value||"",
+      surface:document.getElementById("surface").value||"",
+      lighted:document.getElementById("lighted").checked?"1":"0",
+      le_latitude_deg:le[0].toFixed(6), le_longitude_deg:le[1].toFixed(6),
+      he_latitude_deg:he[0].toFixed(6), he_longitude_deg:he[1].toFixed(6),
+      le_heading_degT:hdg.toFixed(0), he_heading_degT:((hdg+180)%360).toFixed(0),
+      variation_deg:j.variation,
+      // >5 m of movement is a real re-placement; below that the operator only
+      // confirmed what the source proposed, and the source keeps the credit.
+      provenance: moved > 5
+        ? `endpoints placed on Esri World Imagery by the operator (moved ${moved} m from: ${r.note||"unknown source"})`
+        : `accepted as proposed, checked against imagery: ${r.note||"unknown source"}`,
+    };
+  }
+  try {
+    await fetch("/decision", { method:"POST", body:JSON.stringify(body) });
+    toast(kind === "accept"
+      ? `Accepted ${body.runway ? body.runway.le_ident + "/" + body.runway.he_ident : j.code}`
+      : `${kind[0].toUpperCase()}${kind.slice(1)}ped ${j.code}`);
+  } finally {
+    busy = false;
+  }
+  next();
+}
+
+function toast(msg){
+  let t = document.getElementById("toast");
+  if (!t){
+    t = document.createElement("div"); t.id = "toast";
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.className = "show";
+  clearTimeout(t._h);
+  t._h = setTimeout(() => { t.className = ""; }, 2200);
+}
+
+function next(){
+  const j = job();
+  if (j && ri + 1 < j.runways.length) { ri++; loadRwy(); return; }
+  ji++; ri = 0;
+  if (ji >= jobs.length) return finish();
+  loadRwy();
+}
+
+async function finish(){
+  clearLayers();
+  const n = jobs.length;
+  panel.innerHTML = `<div class="done"><p><strong>All ${n} airport${n===1?"":"s"} reviewed.</strong></p>
+    <p class="note">Every decision was written as you made it. Close this tab when you are done;
+    the review server stops once you do.</p>
+    <p class="note" style="margin-top:14px">Submitting is a separate, deliberate step &mdash;
+    run the populate tool with <code>--decisions</code> yourself.</p></div>`;
+  await fetch("/done", { method:"POST", body:"{}" });
+}
+
+(async () => {
+  jobs = await (await fetch("/jobs")).json();
+  for (const j of jobs) for (const r of j.runways){
+    // Geometry-less proposals (OCR only) get a placeholder centred on the field so
+    // the operator can still drag the ends onto what the imagery shows.
+    const hasGeom = r.le_latitude_deg && r.he_latitude_deg;
+    r._srcWidth = r.width_ft || "";
+    r._origLe = hasGeom ? [ +r.le_latitude_deg, +r.le_longitude_deg ]
+                        : [ j.lat + 0.002, j.lon ];
+    r._origHe = hasGeom ? [ +r.he_latitude_deg, +r.he_longitude_deg ]
+                        : [ j.lat - 0.002, j.lon ];
+  }
+  if (!jobs.length) return finish();
+  loadRwy();
+})();
+</script>
+</body>
+</html>
