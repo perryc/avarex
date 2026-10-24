@@ -1,5 +1,5 @@
 import 'dart:typed_data';
-import 'package:avaremp/canada/canada_registry.dart';
+import 'package:avaremp/registry/aircraft_registry.dart';
 import 'package:avaremp/gdl90/ownship_message.dart';
 import 'package:avaremp/storage.dart';
 import 'package:latlong2/latlong.dart';
@@ -31,7 +31,7 @@ class TrafficReportMessage extends Message {
     if(call.isNotEmpty) {
       return call;
     }
-    final CanadaAircraft? reg = Storage().canadaRegistry.lookup(icao);
+    final RegisteredAircraft? reg = Storage().aircraftRegistry.lookup(icao);
     if(reg != null) {
       return reg.mark;
     }
@@ -59,7 +59,7 @@ class TrafficReportMessage extends Message {
   }
 
   /// Aircraft model from the Canadian register, else "".
-  String get model => Storage().canadaRegistry.lookup(icao)?.model ?? "";
+  String get model => Storage().aircraftRegistry.lookup(icao)?.model ?? "";
 
   /// Map label: ident plus model when known ("C-FMHP RV-10").
   String get displayLabel {
@@ -188,7 +188,7 @@ class TrafficReportMessage extends Message {
   /// Fields common to traffic, basic and long reports.
   String commonDecode() {
     double kts = velocity / 0.514444;
-    final CanadaAircraft? reg = Storage().canadaRegistry.lookup(icao);
+    final RegisteredAircraft? reg = Storage().aircraftRegistry.lookup(icao);
     return "Callsign: ${callSign.isEmpty ? "-" : callSign}\n"
         "${reg == null ? "" : "Registered: ${reg.mark} ${reg.common} ${reg.model}\n"}"
         "ICAO: ${icao.toRadixString(16).toUpperCase().padLeft(6, '0')} ($icao)\n"
