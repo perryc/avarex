@@ -99,7 +99,12 @@ def main():
     args = ap.parse_args()
 
     images = []
-    tmp = Path(tempfile.mkdtemp(prefix="garmin_ocr_"))
+    # Video frames used to go to a temp dir and vanish, so there was nothing left to
+    # show alongside the parsed values. Keep them beside the output instead.
+    frames_dir = Path(args.out).resolve().with_suffix("").parent / (
+        Path(args.out).stem + "_frames")
+    tmp = frames_dir
+    tmp.mkdir(parents=True, exist_ok=True)
     for c in args.captures:
         p = Path(c)
         if not p.exists():
@@ -120,7 +125,11 @@ def main():
             current = ident
         if current is None:
             continue
-        entry = by_ident.setdefault(current, {"runways": [], "frequencies": []})
+        entry = by_ident.setdefault(current, {"runways": [], "frequencies": [],
+                                              "sources": []})
+        src = str(Path(img).resolve())
+        if (runways or freqs or ident) and src not in entry["sources"]:
+            entry["sources"].append(src)      # the capture these values were read from
         for r in runways:
             if r not in entry["runways"]:
                 entry["runways"].append(r)
@@ -135,6 +144,8 @@ def main():
             print(f"  RWY {r['le_ident']}/{r['he_ident']} {r['length_ft']}ft {r['surface']}")
         for f in entry["frequencies"]:
             print(f"  {f['type']} {f['frequency_mhz']}")
+        for src in entry.get("sources", []):
+            print(f"  source: {src}")
 
     Path(args.out).write_text(json.dumps(by_ident, indent=2))
     print(f"\nwrote {args.out} - review it, then feed to ourairports_populate.py "
