@@ -101,7 +101,7 @@ class IoScreenState extends State<IoScreen> {
           ? (reg.text.trim().isEmpty ? "Enter the registration (set in Aircraft to prefill)"
                                      : "Unknown mark; enter the six-digit ICAO address instead")
           : "ICAO ${icao.toRadixString(16).toUpperCase()}"
-            "${Storage().canadaRegistry.lookup(icao) == null ? "" : " \u00b7 ${Storage().canadaRegistry.lookup(icao)!.model}"}";
+            "${Storage().aircraftRegistry.lookup(icao) == null ? "" : " \u00b7 ${Storage().aircraftRegistry.lookup(icao)!.model}"}";
       return AlertDialog(
         title: Text("Configure ${link.name}"),
         content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [

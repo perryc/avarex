@@ -1,3 +1,4 @@
+import 'package:avaremp/registry/aircraft_registry.dart';
 import 'dart:async';
 import 'package:avaremp/avidyne/avidyne_ifd.dart';
 import 'package:avaremp/instruments/autopilot.dart';
@@ -129,7 +130,14 @@ class Storage {
   final DownloadManager downloadManager = DownloadManager();
   final GeoJsonParser geoParser = GeoJsonParser();
   final CanadaAirspace canadaAirspace = CanadaAirspace();
+  /// The Canadian register, concrete, for the Canada product and its tests.
   final CanadaRegistry canadaRegistry = CanadaRegistry();
+
+  /// The same object seen as a region-neutral interface. lib/gdl90 and lib/io use
+  /// ONLY this, so traffic labelling never depends on a particular country's data:
+  /// point it at EmptyAircraftRegistry, or another authority's register, and the
+  /// receiver code is unchanged.
+  AircraftRegistry get aircraftRegistry => canadaRegistry;
   final BleReceiver bleReceiver = BleReceiver();
   final ReceptionLogger receptionLogger = ReceptionLogger();
   List<bool> activeChecklistSteps = [];

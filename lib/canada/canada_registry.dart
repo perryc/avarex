@@ -1,3 +1,4 @@
+import 'package:avaremp/registry/aircraft_registry.dart';
 import 'dart:convert';
 
 import 'package:avaremp/canada/canada_import.dart';
@@ -6,11 +7,8 @@ import 'package:csv/csv.dart';
 import 'package:flutter/foundation.dart';
 
 /// One aircraft from the Transport Canada Canadian Civil Aircraft Register.
-class CanadaAircraft {
-  final String mark;   // "C-FMHP"
-  final String model;  // "RV-10"
-  final String common; // "Van'S"
-  const CanadaAircraft(this.mark, this.model, this.common);
+class CanadaAircraft extends RegisteredAircraft {
+  const CanadaAircraft(super.mark, super.model, super.common);
 }
 
 /// In-memory lookup of Canadian aircraft by 24-bit Mode S address, loaded
@@ -19,14 +17,17 @@ class CanadaAircraft {
 /// Canadian aircraft carries a Mode S address in the register, ultralights
 /// (C-Ixx) included, so this resolves the traffic the C-F/C-G formula in
 /// TrafficReportMessage.displayId cannot, and adds the model.
-class CanadaRegistry {
+class CanadaRegistry implements AircraftRegistry {
 
   final Map<int, CanadaAircraft> _byIcao = {};
   final Map<String, int> _byMark = {};
+  @override
   final ValueNotifier<int> change = ValueNotifier<int>(0);
 
+  @override
   int get count => _byIcao.length;
 
+  @override
   CanadaAircraft? lookup(int icao) => _byIcao[icao];
 
   /// Replace the table (used by tests and after an import).
@@ -43,6 +44,9 @@ class CanadaRegistry {
 
   /// Mode S address for a Canadian registration ("C-FMHP", "cfmhp"): from the
   /// register, else the sequential C-F/C-G allocation formula; null otherwise.
+  @override
+  int? lookupIcao(String registration) => lookupMark(registration);
+
   int? lookupMark(String registration) {
     final String mark = normalizeMark(registration);
     if (mark.isEmpty) {

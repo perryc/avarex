@@ -71,7 +71,7 @@ class SoftRfConfig {
   /// C-F/C-G allocation formula, US marks by the N-number formula, and a bare
   /// six-digit hex address as itself. Null when none of those fit.
   static int? icaoForRegistration(String registration) {
-    final int? ca = Storage().canadaRegistry.lookupMark(registration);
+    final int? ca = Storage().aircraftRegistry.lookupIcao(registration);
     if(ca != null) {
       return ca;
     }
