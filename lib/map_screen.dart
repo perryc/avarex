@@ -1,3 +1,4 @@
+import 'package:avaremp/canada/airport_symbol.dart';
 import 'dart:async';
 import 'package:avaremp/utils/elevation_tile_provider.dart';
 import 'package:avaremp/utils/image_utils.dart';
@@ -332,14 +333,17 @@ class MapScreenState extends State<MapScreen> {
     _canadaAirportsCluster ??= makeCluster([
       for(Destination d in Storage().canadaAirspace.airports)
         Marker(point: d.coordinate,
-            width: 22,
-            height: 22,
+            width: 30,
+            height: 30,
+            // the symbol shows runway orientation, so it turns with the map
             child: GestureDetector(
               onTap: () {
                 showDestination(context, [d]);
               },
-              child: const Icon(Icons.local_airport,
-                  size: 22, color: Color(0xFFA0409A)), // chart magenta
+              child: AirportSymbol(
+                  size: 30,
+                  data: Storage().canadaAirspace.airportSymbols[d.locationID]
+                      ?? const AirportSymbolData()),
             )
         )
     ]);

@@ -1,3 +1,4 @@
+import 'package:avaremp/canada/airport_symbol.dart';
 import 'package:avaremp/canada/canada_import.dart';
 import 'package:avaremp/destination/destination.dart';
 import 'package:avaremp/utils/app_log.dart';
@@ -16,6 +17,8 @@ class CanadaAirspace {
   List<Polygon> polygons = [];
   List<OpenAirAirspace> airspaces = [];
   List<Destination> airports = [];
+  // symbol data by airport identifier, for the sectional-style map markers
+  Map<String, AirportSymbolData> airportSymbols = {};
   ValueNotifier<int> change = ValueNotifier<int>(0);
 
   // VFR-focused styling: airspace with floors at or above Canadian Class B
@@ -53,6 +56,7 @@ class CanadaAirspace {
       airports = (await CanadaImport.getAirports())
           .map(Destination.fromMap)
           .toList();
+      airportSymbols = await _loadSymbols();
       change.value++;
     }
     catch(e) {
@@ -60,10 +64,38 @@ class CanadaAirspace {
     }
   }
 
+  // Runway geometry and tower frequencies, reduced to what each symbol needs.
+  Future<Map<String, AirportSymbolData>> _loadSymbols() async {
+    final Set<String> towered = await CanadaImport.getToweredIdents();
+    final Map<String, List<RunwayLine>> byAirport = {};
+    for(final Map<String, Object?> row in await CanadaImport.getRunways()) {
+      final String dlid = (row["DLID"] ?? "").toString();
+      if(dlid.length <= CanadaImport.dlidPrefix.length) {
+        continue;
+      }
+      final RunwayLine? rw = RunwayLine.fromRow(row);
+      if(rw != null) {
+        byAirport.putIfAbsent(dlid.substring(CanadaImport.dlidPrefix.length), () => []).add(rw);
+      }
+    }
+    final Map<String, AirportSymbolData> out = {};
+    for(final Destination d in airports) {
+      final String type = d.type.toLowerCase();
+      out[d.locationID] = AirportSymbolData(
+        runways: byAirport[d.locationID] ?? const [],
+        towered: towered.contains(d.locationID),
+        heliport: type.contains("heli"),
+        water: type.contains("water") || type.contains("seaplane"),
+      );
+    }
+    return out;
+  }
+
   void clear() {
     polygons = [];
     airspaces = [];
     airports = [];
+    airportSymbols = {};
     change.value++;
   }
 
