@@ -429,6 +429,44 @@ class CanadaImport {
         "ARPLongitude from airports where DLID like '$dlidPrefix%'");
   }
 
+  // Runway geometry for the map symbols: one row per runway, with the
+  // threshold coordinates where OurAirports has them.
+  static Future<List<Map<String, Object?>>> getRunways() async {
+    Database? db = await MainDatabaseHelper.db.database;
+    if(db == null) {
+      return [];
+    }
+    try {
+      return await db.rawQuery("select DLID, Length, Surface, LEIdent, "
+          "LELatitude, LELongitude, HELatitude, HELongitude "
+          "from airportrunways where DLID like '$dlidPrefix%'");
+    }
+    catch(e) {
+      return []; // table absent: nothing imported yet
+    }
+  }
+
+  // Airports that have a tower frequency, which the symbol draws in blue.
+  static Future<Set<String>> getToweredIdents() async {
+    Database? db = await MainDatabaseHelper.db.database;
+    if(db == null) {
+      return {};
+    }
+    try {
+      final List<Map<String, Object?>> rows = await db.rawQuery(
+          "select distinct DLID from airportfreq where DLID like '$dlidPrefix%' "
+          "and Type like 'LCL%'");
+      return rows
+          .map((r) => (r["DLID"] ?? "").toString())
+          .where((d) => d.length > dlidPrefix.length)
+          .map((d) => d.substring(dlidPrefix.length))
+          .toSet();
+    }
+    catch(e) {
+      return {};
+    }
+  }
+
   // Transport Canada register rows for the in-memory lookup
   static Future<List<Map<String, Object?>>> getRegistry() async {
     Database? db = await MainDatabaseHelper.db.database;
