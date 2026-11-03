@@ -28,8 +28,9 @@ class RunwayLine {
 
   const RunwayLine(this.bearingDeg, this.lengthFt, this.hard);
 
-  /// Bearing from the threshold coordinates when both are known, else from
-  /// the runway number ("07" means 070 magnetic, close enough to draw).
+  /// Bearing from whichever the source gives, in order of how good it is:
+  /// the true bearing the Canada Flight Supplement prints, then the threshold
+  /// coordinates, then the runway number ("07" means 070 magnetic).
   static RunwayLine? fromRow(Map<String, Object?> r) {
     double? toDouble(Object? v) {
       if(v == null) {
@@ -43,6 +44,12 @@ class RunwayLine {
 
     final double length = toDouble(r["Length"]) ?? 0;
     final bool hard = isHardSurface((r["Surface"] ?? "").toString());
+
+    final double? trueHeading = toDouble(r["LEHeadingT"]);
+    if(trueHeading != null) {
+      return RunwayLine(trueHeading % 180, length, hard);
+    }
+
     final double? leLat = toDouble(r["LELatitude"]), leLon = toDouble(r["LELongitude"]);
     final double? heLat = toDouble(r["HELatitude"]), heLon = toDouble(r["HELongitude"]);
 

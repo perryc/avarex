@@ -10,19 +10,18 @@ import 'package:intl/intl.dart';
 import 'package:path/path.dart' as path;
 import 'package:universal_io/io.dart';
 
-// Downloadable "Canada" product: Canadian airports/runways/frequencies/
-// navaids from OurAirports, and airspace from the soaringweb.org OpenAir
-// file. Unlike the FAA products this fetches from public sources directly
-// (this fork has no access to the apps4av data pipeline), so it has its own
-// date-based versioning instead of FAA cycles.
+// Downloadable "Canada" product: airspace from the soaringweb.org OpenAir
+// file and the Transport Canada aircraft register. Unlike the FAA products
+// this fetches from public sources directly (this fork has no access to the
+// apps4av data pipeline), so it has its own date-based versioning instead of
+// FAA cycles.
+//
+// Aerodromes are not downloaded. They come from the Canada Flight Supplement
+// the user supplies; see CfsImport.
 class CanadaDownload extends Download {
 
   static const String filename = "canadax"; // manifest file name in dataDir
 
-  static const String _ourAirportsBase =
-      "https://davidmegginson.github.io/ourairports-data";
-  static const String _ourAirportsMirror =
-      "https://raw.githubusercontent.com/davidmegginson/ourairports-data/main";
   // Canadian airspace in OpenAir format, maintained by Chris Gough, derived
   // from Nav Canada's Designated Airspace Handbook. The file name carries a
   // version number (e.g. CanAirspace322all.txt) so it is located from the
@@ -38,7 +37,7 @@ class CanadaDownload extends Download {
   static const String _registryZip =
       "https://wwwapps.tc.gc.ca/saf-sec-sur/2/ccarcs-riacc/download/ccarcsdb.zip";
 
-  static const int _expiryDays = 28; // OurAirports updates nightly
+  static const int _expiryDays = 28; // the register is refreshed daily
 
   bool _cancelled = false;
 
@@ -83,18 +82,6 @@ class CanadaDownload extends Download {
     }
   }
 
-  Future<void> _fetchCsv(String name, File to) async {
-    try {
-      await _fetch("$_ourAirportsBase/$name", to);
-    }
-    catch(e) {
-      if(_cancelled) {
-        rethrow;
-      }
-      await _fetch("$_ourAirportsMirror/$name", to);
-    }
-  }
-
   // locate the current CanAirspace<version>all.txt on the index page
   Future<String> _findAirspaceUrl() async {
     String page = await http.read(Uri.parse(_airspaceIndex));
@@ -119,19 +106,7 @@ class CanadaDownload extends Download {
     try {
       await dir.create(recursive: true);
 
-      // 0-50: fetch OurAirports CSVs and the airspace file
-      final List<String> csvs = [
-        CanadaImport.airportsCsv,
-        CanadaImport.runwaysCsv,
-        CanadaImport.frequenciesCsv,
-        CanadaImport.navaidsCsv,
-      ];
-      for(int i = 0; i < csvs.length; i++) {
-        await _fetchCsv(csvs[i], File(CanadaImport.dataPath(csvs[i])));
-        callback(chart, ((i + 1) / csvs.length * 40).toInt());
-      }
-
-      // airspace is optional; airports still import if soaringweb is down
+      // airspace is optional; the register still imports if soaringweb is down
       bool airspaceOk = true;
       try {
         String url = await _findAirspaceUrl();
@@ -180,7 +155,6 @@ class CanadaDownload extends Download {
       // manifest: version line then the files delete() should remove
       final String date = DateFormat("yyyy-MM-dd").format(DateTime.now());
       final List<String> managed = [
-        for(String f in csvs) path.join(CanadaImport.subDir, f),
         if(airspaceOk) path.join(CanadaImport.subDir, CanadaImport.airspaceFile),
         if(registryOk) path.join(CanadaImport.subDir, CanadaImport.registryFile),
       ];

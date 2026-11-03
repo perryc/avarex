@@ -47,4 +47,28 @@ void main() {
     expect(d.hardLengthFt, 7900);
     expect(const AirportSymbolData(runways: [RunwayLine(90, 4000, false)]).hardLengthFt, 0);
   });
+
+  test("the CFS true bearing beats the runway number", () {
+    // 13 would mean 130 from the number alone; the supplement says 128 true
+    final RunwayLine? r = RunwayLine.fromRow({
+      "Length": "7901", "Surface": "ASPH", "LEIdent": "13", "LEHeadingT": "128",
+    });
+    expect(r, isNotNull);
+    expect(r!.bearingDeg, closeTo(128, 0.001));
+    expect(r.hard, true);
+
+    // folded to 0..180, because a runway line has no direction
+    final RunwayLine? back = RunwayLine.fromRow({
+      "Length": "7901", "Surface": "ASPH", "LEIdent": "31", "LEHeadingT": "308",
+    });
+    expect(back!.bearingDeg, closeTo(128, 0.001));
+  });
+
+  test("without a true bearing the runway number still works", () {
+    final RunwayLine? r = RunwayLine.fromRow({
+      "Length": "3000", "Surface": "GRASS", "LEIdent": "18", "LEHeadingT": "",
+    });
+    expect(r!.bearingDeg, closeTo(0, 0.001));   // 180 folded to 0..180
+    expect(r.hard, false);
+  });
 }
