@@ -316,8 +316,9 @@ class CfsImport {
           (le == null ? null : (le + 180) % 360);
       return <String, Object?>{
         "DLID": dlid,
-        "Length": r.lengthFt.toString(),
-        "Width": r.widthFt.toString(),
+        // empty, not "null": a few entries publish no dimensions at all
+        "Length": r.lengthFt?.toString() ?? "",
+        "Width": r.widthFt?.toString() ?? "",
         "Surface": r.surface,
         "LEIdent": r.ident,
         "HEIdent": r.oppositeIdent ?? "",

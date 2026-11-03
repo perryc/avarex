@@ -214,4 +214,75 @@ ILS IQR 109.5 (Rwy 13) RVR LOC reliable only within 10° either side""")]);
     expect(a.ils.single.frequency, "109.5");
     expect(a.ils.single.runway, "13");
   });
+
+  // The supplement is not typeset consistently. Each of these cost an
+  // aerodrome its runways on the map until it was handled.
+  test("a masculine ordinal instead of a degree sign", () {
+    // real example: CAG2, which mixes the two within one line
+    final CfsVolume v = CfsParser.parse([page(code: "SKCTSA", """
+TESTVILLE / AEROGATE SK CTSA
+REF N50 35 52 W104 36 04 6N 10°E (2011) UTC-6 Elev 1980’
+RWY DATA Rwy 11(105º)/29(285°) 1900x30 broken
+ASPH""")]);
+    final CfsRunway r = v.aerodromes.single.runways.single;
+    expect(r.ident, "11");
+    expect(r.bearingTrue, 105);
+    expect(r.oppositeBearingTrue, 285);
+    expect(r.lengthFt, 1900);
+    expect(r.surface, "ASPH");
+  });
+
+  test("no degree sign at all", () {
+    final CfsVolume v = CfsParser.parse([page(code: "ABCTSB", """
+TESTVILLE AB CTSB
+REF N51 15 50 W113 56 04 2.6SE 15°E (2012) UTC-7(6) Elev 3653´
+RWY DATA Rwy 09(089)/27(269) 3031x75 GRASS""")]);
+    final CfsRunway r = v.aerodromes.single.runways.single;
+    expect(r.bearingTrue, 89);
+    expect(r.lengthFt, 3031);
+    expect(r.surface, "TURF");
+  });
+
+  test("a capital X and spaces around it", () {
+    final CfsVolume v = CfsParser.parse([page(code: "ABCTSC", """
+TESTVILLE AB CTSC
+REF N51 15 50 W113 56 04 2.6SE 15°E (2012) UTC-7(6) Elev 3653´
+RWY DATA
+Rwy 07(072°)/25(252°) 2400X60
+Rwy 13(132°)/31(312°) 5000 x75 GRVL
+Rwy 16(164°)/34(344°) 1675x 80 GRASS""")]);
+    final List<CfsRunway> r = v.aerodromes.single.runways;
+    expect(r.length, 3);
+    expect(r[0].lengthFt, 2400);
+    expect(r[0].widthFt, 60);
+    expect(r[1].lengthFt, 5000);
+    expect(r[1].widthFt, 75);
+    expect(r[1].surface, "GRVL");
+    expect(r[2].lengthFt, 1675);
+    expect(r[2].widthFt, 80);
+  });
+
+  test("a runway with no dimensions published is still a runway", () {
+    final CfsVolume v = CfsParser.parse([page(code: "ABCTSD", """
+TESTVILLE AB CTSD
+REF N51 15 50 W113 56 04 2.6SE 15°E (2012) UTC-7(6) Elev 3653´
+RWY DATA Rwy 12(119°)/30(299°)
+RCR Opr Ltd win maint. Rwy 12/30 PCN""")]);
+    final CfsRunway r = v.aerodromes.single.runways.single;
+    expect(r.ident, "12");
+    expect(r.bearingTrue, 119);
+    expect(r.lengthFt, isNull);
+    expect(r.widthFt, isNull);
+  });
+
+  test("a runway mentioned in prose is not mistaken for runway data", () {
+    // "Rwy 12/30 PCN" and "Rgt hand circuits Rwy 12" must not become runways
+    final CfsVolume v = CfsParser.parse([page(code: "ABCTSE", """
+TESTVILLE AB CTSE
+REF N51 15 50 W113 56 04 2.6SE 15°E (2012) UTC-7(6) Elev 3653´
+RCR Opr Ltd win maint. Rwy 12/30 PCN
+PRO Rgt hand circuits Rwy 12 (CAR 602.96).
+CAUTION Watch for tfc on hwy 44 when landing Rwy 07 and dep Rwy 25.""")]);
+    expect(v.aerodromes.single.runways, isEmpty);
+  });
 }

@@ -54,6 +54,25 @@ cycle              ${v.effectiveFrom} to ${v.effectiveTo}""");
     expect(count((x) => x.elevationFt != null) / a.length, greaterThan(0.95));
     expect(withRunway / landplanes.length, greaterThan(0.95));
     expect(v.effectiveFrom, isNotNull);
+
+    // Aerodromes whose runway line is typeset oddly, found by reading the
+    // volume rather than by guessing. Each lost its runways once.
+    for(final String ident in const [
+      "CAG2",   // Rwy 11(105º) with a masculine ordinal, not a degree sign
+      "CFM7",   // Rwy 09(089) with no degree sign at all
+      "CJR2",   // the same, after an RCR line
+      "CRF3",   // 2400X60, a capital X
+      "CJB5",   // 5000 x75, a space before it
+      "CCF6",   // 1675x 80, a space after it
+      "CYWN",   // bearings but no dimensions published
+      "CEZ4", "CPV9", "CRF5",
+    ]) {
+      final Iterable<CfsAerodrome> found = a.where((x) => x.ident == ident);
+      if(found.isEmpty) {
+        continue;            // a different volume
+      }
+      expect(found.first.runways, isNotEmpty, reason: ident);
+    }
     // every position must land inside Canada
     for(final CfsAerodrome x in a.where((x) => x.latitude != null)) {
       expect(x.latitude, inInclusiveRange(41, 84), reason: x.ident);
@@ -67,8 +86,12 @@ cycle              ${v.effectiveFrom} to ${v.effectiveTo}""");
     }
     // runway dimensions must be sane
     for(final CfsRunway r in a.expand((x) => x.runways)) {
-      expect(r.lengthFt, inInclusiveRange(200, 20000));
-      expect(r.widthFt, inInclusiveRange(10, 1000));
+      if(r.lengthFt != null) {
+        expect(r.lengthFt, inInclusiveRange(200, 20000), reason: r.ident);
+      }
+      if(r.widthFt != null) {
+        expect(r.widthFt, inInclusiveRange(10, 1000), reason: r.ident);
+      }
     }
   }, skip: path.isEmpty ? "set CFS_PAGES to a page-text file" : false);
 }
