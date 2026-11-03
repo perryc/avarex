@@ -64,9 +64,11 @@ class CanadaAirspace {
     }
   }
 
-  // Runway geometry and tower frequencies, reduced to what each symbol needs.
+  // Runway geometry, tower frequencies and fuel, reduced to what each symbol
+  // needs.
   Future<Map<String, AirportSymbolData>> _loadSymbols() async {
     final Set<String> towered = await CanadaImport.getToweredIdents();
+    final Set<String> fuel = await CanadaImport.getFuelIdents();
     final Map<String, List<RunwayLine>> byAirport = {};
     for(final Map<String, Object?> row in await CanadaImport.getRunways()) {
       final String dlid = (row["DLID"] ?? "").toString();
@@ -84,6 +86,7 @@ class CanadaAirspace {
       out[d.locationID] = AirportSymbolData(
         runways: byAirport[d.locationID] ?? const [],
         towered: towered.contains(d.locationID),
+        fuel: fuel.contains(d.locationID),
         heliport: type.contains("heli"),
         water: type.contains("water") || type.contains("seaplane"),
       );

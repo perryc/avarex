@@ -1,3 +1,4 @@
+import 'package:avaremp/canada/cfs_page_view.dart';
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:avaremp/ai/ai_screen.dart';
 import 'package:avaremp/business/airport_businesses_gate.dart';
@@ -70,7 +71,7 @@ class LongPressFuture {
 class LongPressScreenState extends State<LongPressScreen> {
 
   int _index = 0;
-  static const List<String> labels = ["Main", "AD", "METAR", "NOTAM", "SUA", "Wind", "3D", "3DW", "ST", "Business"];
+  static const List<String> labels = ["Main", "AD", "CFS", "METAR", "NOTAM", "SUA", "Wind", "3D", "3DW", "ST", "Business"];
 
   late Future<LongPressFuture> _loadFuture;
 
@@ -338,6 +339,14 @@ class LongPressScreenState extends State<LongPressScreen> {
           ],
         );
       }
+    }
+
+    // Canadian aerodromes carry their own page in the Flight Supplement; the
+    // view says so itself when the ident is in no imported volume.
+    if(showDestination is AirportDestination &&
+        showDestination.locationID.toUpperCase().startsWith("C")) {
+      pages[labels.indexOf("CFS")] =
+          CfsPageView(ident: showDestination.locationID);
     }
 
     pages[labels.indexOf("3D")] = Airspace3DView(

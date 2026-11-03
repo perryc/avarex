@@ -197,6 +197,46 @@ class CfsAerodrome {
   /// "CALGARY / SPRINGBANK", town first.
   String get city => name.contains("/") ? name.split("/").first.trim() : name;
 
+  Map<String, Object?> toJson() => {
+    "id": ident, "p": province, "n": name,
+    if(isHeliport) "h": 1,
+    if(isWaterAerodrome) "w": 1,
+    "la": latitude, "lo": longitude, "e": elevationFt, "v": variation,
+    "u": utcOffset,
+    "r": runways.map((x) => x.toJson()).toList(),
+    "f": frequencies.map((x) => x.toJson()).toList(),
+    "nv": navaids.map((x) => x.toJson()).toList(),
+    "il": ils.map((x) => x.toJson()).toList(),
+    "fu": fuel, "op": operator, "p1": firstPage, "p2": lastPage,
+  };
+
+  static CfsAerodrome fromJson(Map<String, Object?> j) {
+    List<T> list<T>(String key, T Function(Map<String, Object?>) of) =>
+        ((j[key] ?? const []) as List<dynamic>)
+            .map((e) => of((e as Map).cast<String, Object?>()))
+            .toList();
+    return CfsAerodrome(
+      ident: j["id"] as String,
+      province: j["p"] as String,
+      name: j["n"] as String,
+      isHeliport: j["h"] == 1,
+      isWaterAerodrome: j["w"] == 1,
+      latitude: (j["la"] as num?)?.toDouble(),
+      longitude: (j["lo"] as num?)?.toDouble(),
+      elevationFt: j["e"] as int?,
+      variation: j["v"] as int?,
+      utcOffset: j["u"] as int?,
+      runways: list("r", CfsRunway.fromJson),
+      frequencies: list("f", CfsFrequency.fromJson),
+      navaids: list("nv", CfsNavaid.fromJson),
+      ils: list("il", CfsIls.fromJson),
+      fuel: j["fu"] as String?,
+      operator: j["op"] as String?,
+      firstPage: j["p1"] as int,
+      lastPage: j["p2"] as int,
+    );
+  }
+
   String? frequencyOf(String type) {
     for(final CfsFrequency f in frequencies) {
       if(f.type == type) {
@@ -221,6 +261,20 @@ class CfsVolume {
 
   bool get isExpired =>
       effectiveTo != null && DateTime.now().toUtc().isAfter(effectiveTo!);
+
+  Map<String, Object?> toJson() => {
+    "a": aerodromes.map((x) => x.toJson()).toList(),
+    "from": effectiveFrom?.toIso8601String(),
+    "to": effectiveTo?.toIso8601String(),
+  };
+
+  static CfsVolume fromJson(Map<String, Object?> j) => CfsVolume(
+    aerodromes: ((j["a"] ?? const []) as List<dynamic>)
+        .map((e) => CfsAerodrome.fromJson((e as Map).cast<String, Object?>()))
+        .toList(),
+    effectiveFrom: DateTime.tryParse((j["from"] ?? "") as String),
+    effectiveTo: DateTime.tryParse((j["to"] ?? "") as String),
+  );
 }
 
 class CfsParser {

@@ -72,7 +72,7 @@ dependencies:
   syncfusion_flutter_pdfviewer: ^30.2.6
   # pdfium, for reading the Canada Flight Supplement: it is the only
   # engine that decodes the CFS fonts (Syncfusion returns glyph codes)
-  pdfrx: ^2.0.0
+  pdfrx: ^2.11.0
   day_night_time_picker: ^1.3.0+1
   fl_chart: ^1.0.0
   point_in_polygon: ^1.0.0
