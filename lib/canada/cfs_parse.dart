@@ -38,8 +38,8 @@ class CfsRunway {
   final String? oppositeIdent;    // "31"; null for a one-way strip
   final int? bearingTrue;         // from the CFS where it prints one
   final int? oppositeBearingTrue;
-  final int lengthFt;
-  final int widthFt;
+  final int? lengthFt;            // null when the supplement prints none
+  final int? widthFt;
   final String surface;           // normalised code, "" when the CFS omits it
 
   const CfsRunway({
@@ -47,8 +47,8 @@ class CfsRunway {
     this.oppositeIdent,
     this.bearingTrue,
     this.oppositeBearingTrue,
-    required this.lengthFt,
-    required this.widthFt,
+    this.lengthFt,
+    this.widthFt,
     this.surface = "",
   });
 
@@ -78,8 +78,8 @@ class CfsRunway {
     oppositeIdent: j["o"] as String?,
     bearingTrue: j["b"] as int?,
     oppositeBearingTrue: j["ob"] as int?,
-    lengthFt: j["l"] as int,
-    widthFt: j["w"] as int,
+    lengthFt: j["l"] as int?,
+    widthFt: j["w"] as int?,
     surface: (j["s"] ?? "") as String,
   );
 }
@@ -322,17 +322,37 @@ class CfsParser {
   // Rwy 13(128°)/31(308°) 7901x150 ASPH   -- bearings given
   // Rwy 18/36 3000x190 GRASS/SNOW         -- no bearings, small aerodromes
   // Rwy 12(123°) 2500x60 GRASS            -- one direction only
-  // Lengths carry thousands separators at the big fields (10,995x200), and the
-  // surface is optional: a runway must not be lost because it has no surface.
-  // The surface is one word: letting it run on would swallow the "Rwy" that
-  // starts the next runway on the same folded line.
-  static const String _dims = r"\s+([\d,]+)x([\d,]+)(?:\s+([A-Za-z][A-Za-z/\-]*))?";
-  static final RegExp _runwayBoth =
-      RegExp(r"Rwy\s+(\w{2,3})\((\d{1,3})°\)/(\w{2,3})\((\d{1,3})°\)" + _dims);
+  //
+  // The supplement is not typeset consistently, and every one of these is in
+  // the volume this was measured against:
+  //   Rwy 11(105º)/29(285°)   a masculine ordinal, not a degree sign
+  //   Rwy 09(089)/27(269)     no degree sign at all
+  //   Rwy 07(072°)/25(252°) 2400X60     a capital X
+  //   Rwy 13(132°)/31(312°) 5000 x75     a space around the X
+  //   Rwy 12(119°)/30(299°)              no dimensions published
+  // Missing any of them loses the aerodrome's runways altogether, so the
+  // degree sign and the dimensions are both optional and the separator is
+  // taken either way. Lengths carry thousands separators at the big fields
+  // (10,995x200).
+  //
+  // The surface runs to a few words ("broken ASPH", "GRASS/GRVL/CLAY", "ASPH
+  // AGN IIIA") but must never reach the "Rwy" that starts the next runway on
+  // the same folded line, so no word of it may be that one.
+  static const String _degree = r"[\u00b0\u00ba\u02da]?";
+  static const String _size = r"([\d,]+)\s*[xX]\s*([\d,]+)";
+  static const String _surf =
+      r"(?:\s+((?:(?!Rwy\b)[A-Za-z][A-Za-z/\-]*\s*){1,3}))?";
+  // dimensions are optional only where bracketed bearings make the line
+  // unambiguous; without them "Rwy 12/30 PCN" in a remark would look like one
+  static const String _dimsOptional = "(?:\\s+$_size)?$_surf";
+  static const String _dims = "\\s+$_size$_surf";
+  static final RegExp _runwayBoth = RegExp(
+      "Rwy\\s+(\\w{2,3})\\((\\d{1,3})$_degree\\)/(\\w{2,3})\\((\\d{1,3})$_degree\\)"
+      "$_dimsOptional");
   static final RegExp _runwayPlain =
       RegExp(r"Rwy\s+(\d{2}[LRC]?)/(\d{2}[LRC]?)" + _dims);
-  static final RegExp _runwayOne =
-      RegExp(r"Rwy\s+(\w{2,3})\((\d{1,3})°\)" + _dims);
+  static final RegExp _runwayOne = RegExp(
+      "Rwy\\s+(\\w{2,3})\\((\\d{1,3})$_degree\\)$_dims");
 
   static final RegExp _frequency = RegExp(r"\b(1[0-9]{2}\.[0-9]{1,3})\b");
 
@@ -597,8 +617,8 @@ class CfsParser {
         bearingTrue: int.parse(m.group(2)!),
         oppositeIdent: m.group(3),
         oppositeBearingTrue: int.parse(m.group(4)!),
-        lengthFt: _int(m.group(5)!),
-        widthFt: _int(m.group(6)!),
+        lengthFt: _int(m.group(5)),
+        widthFt: _int(m.group(6)),
         surface: _surface(m.group(7)),
       ));
     }
@@ -609,8 +629,8 @@ class CfsParser {
       out.add(CfsRunway(
         ident: m.group(1)!,
         oppositeIdent: m.group(2),
-        lengthFt: _int(m.group(3)!),
-        widthFt: _int(m.group(4)!),
+        lengthFt: _int(m.group(3)),
+        widthFt: _int(m.group(4)),
         surface: _surface(m.group(5)),
       ));
     }
@@ -618,8 +638,8 @@ class CfsParser {
       out.add(CfsRunway(
         ident: m.group(1)!,
         bearingTrue: int.parse(m.group(2)!),
-        lengthFt: _int(m.group(3)!),
-        widthFt: _int(m.group(4)!),
+        lengthFt: _int(m.group(3)),
+        widthFt: _int(m.group(4)),
         surface: _surface(m.group(5)),
       ));
     }
@@ -646,7 +666,8 @@ class CfsParser {
   static double _dms(String d, String m, String s) =>
       int.parse(d) + int.parse(m) / 60 + (double.tryParse(s) ?? 0) / 3600;
 
-  static int _int(String s) => int.parse(s.replaceAll(",", ""));
+  static int? _int(String? s) =>
+      s == null ? null : int.tryParse(s.replaceAll(",", ""));
 
   /// "Effective 0901Z 16 May 2024 to 0901Z 11 July 2024", off the footer.
   static DateTime? _effectiveDate(List<String> pages, {required bool from}) {
