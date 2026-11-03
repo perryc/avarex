@@ -40,6 +40,27 @@ class CanadaImport {
 
   static bool _filesPresent() => File(dataPath(registryFile)).existsSync();
 
+  /// The OurAirports CSVs this used to download are dead weight on every
+  /// device that ran an older build - around 14 MB of files nothing reads
+  /// any more. They are not in the download manifest, so deleting the
+  /// product would leave them behind; remove them whenever we pass by.
+  static Future<void> removeLegacyFiles() async {
+    for(final String name in const [
+      "airports.csv", "runways.csv", "airport-frequencies.csv", "navaids.csv",
+    ]) {
+      try {
+        final File f = File(dataPath(name));
+        if(f.existsSync()) {
+          await f.delete();
+          AppLog.logMessage("Canada: removed the unused $name");
+        }
+      }
+      catch(e) {
+        // read-only or already gone; it is only wasted space
+      }
+    }
+  }
+
   /// Put the cached Transport Canada register into main.db. The aerodromes
   /// are CfsImport's job and are left alone.
   static Future<void> importAll() async {
@@ -195,6 +216,7 @@ class CanadaImport {
       if(_filesPresent() && await _importedVersion(db) < importVersion) {
         await importAll();
       }
+      await removeLegacyFiles();
       await CfsImport.reimportIfInstalled();
     }
     catch(e) {
