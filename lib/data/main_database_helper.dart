@@ -217,6 +217,25 @@ class MainDatabaseHelper {
     return Future.value([]);
   }
 
+  /// An airport is found by its name as well as its identifier: "Disley"
+  /// finds CDS2, "Springbank" finds CYBW. The name is matched anywhere in it
+  /// because Canadian entries are titled town first ("CALGARY / SPRINGBANK")
+  /// and the part worth typing is often the second one.
+  ///
+  /// That scan cannot use an index and runs on every keystroke, so it waits
+  /// for three characters. Below that, only the old exact city match applies.
+  /// [match] must already have its quotes doubled.
+  static String airportNameClause(String match, {required bool exact}) {
+    final String upper = match.toUpperCase();
+    if(exact) {
+      return "(UPPER(City) = '$upper') or (UPPER(FacilityName) = '$upper')";
+    }
+    if(upper.length < 3) {
+      return "(UPPER(City) = '$upper')";
+    }
+    return "(UPPER(FacilityName) like '%$upper%') or (UPPER(City) like '$upper%')";
+  }
+
   // Use exact = true for exact match, otherwise for search use exact = false
   Future<List<Destination>> findDestinations(String match, {bool exact = false}) async {
     List<Map<String, dynamic>> maps = [];
@@ -267,11 +286,14 @@ class MainDatabaseHelper {
       return [GpsDestination(locationID: Destination.toSexagesimal(coordinate), type: Destination.typeGps, facilityName: "", coordinate: coordinate)];
     }
     final db = await database;
-    String eMatch = exact ? " = '$match'" : "like '$match%'";
+    // the match is pasted into the SQL, so a quote in it has to be doubled
+    String safe = match.replaceAll("'", "''");
+    String eMatch = exact ? " = '$safe'" : "like '$safe%'";
+    String byName = airportNameClause(safe, exact: exact);
     if (db != null) {
       maps = await DbGeneral.query(db,
         // combine airports, fix, nav that matches match word and return 3 columns to show in the find result
-          "      select LocationID, FacilityName, Type, ARPLongitude, ARPLatitude from airports where ((LocationID $eMatch) or (UPPER(City) = '${match.toUpperCase()}')) "
+          "      select LocationID, FacilityName, Type, ARPLongitude, ARPLatitude from airports where ((LocationID $eMatch) or $byName) "
           "union select LocationID, FacilityName, Type, ARPLongitude, ARPLatitude from nav      where (LocationID $eMatch) "
           "union select LocationID, FacilityName, Type, ARPLongitude, ARPLatitude from fix      where (LocationID $eMatch) "
           "order by Type asc limit $_limit"
