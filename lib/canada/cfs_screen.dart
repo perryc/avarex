@@ -163,7 +163,7 @@ class CfsScreenState extends State<CfsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Canada Flight Supplement")),
+      appBar: AppBar(title: const Text("Canadian CFS Import")),
       body: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(

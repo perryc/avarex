@@ -80,7 +80,7 @@ class CfsPageViewState extends State<CfsPageView> {
                   const SizedBox(height: 8),
                   Text(
                       "Add the volume that covers it from the menu, under "
-                      "Flight Supplement.",
+                      "Canadian CFS Import.",
                       textAlign: TextAlign.center,
                       style: TextStyle(
                           fontSize: 12,

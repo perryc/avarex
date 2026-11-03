@@ -333,8 +333,8 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver { //
                       _buildMenuItem(
                         context,
                         icon: MdiIcons.bookOpenPageVariant,
-                        title: "Flight Supplement",
-                        subtitle: "Canadian aerodromes from your CFS",
+                        title: "Canadian CFS Import",
+                        subtitle: "Aerodromes from your Flight Supplement",
                         onTap: () {
                           Navigator.pop(context);
                           Navigator.pushNamed(context, '/cfs');
