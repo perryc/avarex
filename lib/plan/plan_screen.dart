@@ -16,7 +16,9 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:universal_io/io.dart';
+import 'best_cruise_altitude.dart';
 import 'plan_create_widget.dart';
+import 'waypoint.dart';
 import 'plan_file_widget.dart';
 import 'plan_item_widget.dart';
 import 'plan_line_widget.dart';
@@ -28,6 +30,7 @@ import 'package:avaremp/storage.dart';
 import 'package:flutter/material.dart';
 import 'package:avaremp/data/altitude_profile.dart';
 import 'package:avaremp/utils/geo_calculations.dart';
+import 'package:avaremp/weather/winds_aloft.dart';
 import 'package:avaremp/weather/winds_cache.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -38,21 +41,56 @@ class PlanScreen extends StatefulWidget {
 }
 
 class PlanScreenState extends State<PlanScreen> {
+  static PlanScreenState? _active;
   final ScrollController _scrollController = ScrollController();
 
   // null shows the plan (waypoint) editor; 0-4 show an action sub-page inline
   int? _actionTab;
+  bool _findingBestAltitude = false;
+  bool _visible = false;
+
+  /// Plan stays mounted under the other tabs. The one-second route refresh
+  /// waits until this tab is showing.
+  static void setVisible(bool visible) {
+    _active?._setVisible(visible);
+  }
+
+  void _setVisible(bool visible) {
+    if (_visible == visible) {
+      return;
+    }
+    _visible = visible;
+    if (!visible) {
+      PlanLineWidgetState.endEditing();
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() {});
+    if (visible) {
+      _loadPlanCruiseFromAircraft();
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    _active = this;
+    _visible = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToCurrentWaypoint();
+      _loadPlanCruiseFromAircraft();
+      if (Storage().route.applyEndpointFieldElevations()) {
+        Storage().route.update();
+      }
     });
   }
 
   @override
   void dispose() {
+    if (identical(_active, this)) {
+      _active = null;
+    }
     _scrollController.dispose();
     super.dispose();
   }
@@ -71,10 +109,48 @@ class PlanScreenState extends State<PlanScreen> {
     }
   }
 
+  /// Cruise speed and fuel flow from the selected aircraft. Once per visit, not on the one-second plan refresh.
+  Future<void> _loadPlanCruiseFromAircraft() async {
+    final String selector = await _planAircraftSelector();
+    if (selector.isEmpty || !mounted) {
+      return;
+    }
+    final int alt = Storage().route.altitude;
+    final int powerPct = Storage().settings.getPerformanceCruisePowerPercent();
+    CruiseResult? cruise;
+    try {
+      final Aircraft dbAc = await UserDatabaseHelper.db.getAircraft(selector);
+      cruise = PlanPerformanceHelper.cruiseAtPlanAltitude(dbAc, alt, powerPercent: powerPct);
+    } catch (_) {}
+    cruise ??= PlanPerformanceHelper.cruiseForBuiltInDisplayName(selector, alt, powerPercent: powerPct);
+    if (cruise == null || !mounted) {
+      return;
+    }
+    final double tas = cruise.ktas.roundToDouble();
+    final double gph = (cruise.gph * 10).round() / 10.0;
+    if (tas <= 0 || gph <= 0) {
+      return;
+    }
+    final bool sameSpeed = Storage().settings.getTas().roundToDouble() == tas;
+    final bool sameBurn = (Storage().settings.getFuelBurn() - gph).abs() < 0.05;
+    if (sameSpeed && sameBurn) {
+      return;
+    }
+    Storage().settings.setTas(tas);
+    Storage().settings.setFuelBurn(gph);
+    if (mounted) {
+      Storage().route.update();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final PlanRoute route = Storage().route;
-    Storage().planSearch = false;
+    // Cleared only while this tab is up. Insert-waypoint sets the flag and
+    // then leaves for Find; a rebuild on the way out must not clear it.
+    if (_visible) {
+      Storage().planSearch = false;
+    }
 
     double bottom = Constants.bottomPaddingSize(context);
 
@@ -91,128 +167,35 @@ class PlanScreenState extends State<PlanScreen> {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                SizedBox(
-                  width: 60,
-                  child: TextFormField(
-                    keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: true),
-                    onChanged: (value) {
-                      double? pValue = double.tryParse(value);
-                      Storage().settings.setTas(pValue ?? Storage().settings.getTas());
-                    },
-                    controller: TextEditingController()..text = Storage().settings.getTas().round().toString(),
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: "ASpd",
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  width: 60,
-                  child: TextFormField(
-                    keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: true),
-                    onChanged: (value) {
-                      double? pValue = double.tryParse(value);
-                      Storage().settings.setFuelBurn(pValue ?? Storage().settings.getFuelBurn());
-                    },
-                    controller: TextEditingController()
-                      ..text = Storage().settings.getFuelBurn().toStringAsFixed(1),
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: "GPH",
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  width: 70,
-                  child: TextFormField(
-                    keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: true),
-                    onChanged: (value) {
-                      int? pValue = int.tryParse(value);
-                      pValue ??= 3000;
-                      Storage().route.altitude = pValue;
-                    },
-                    controller: TextEditingController()..text = Storage().route.altitude.toString(),
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: "Alt",
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                    ),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.flight),
-                  tooltip: 'Load ASpd and GPH from Aircraft & Performance (selected aircraft)',
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                  onPressed: () async {
-                    final String lastPerf = Storage().settings.getLastPerformanceAircraft().trim();
-                    if (!context.mounted) return;
-                    String selector = lastPerf.isNotEmpty
-                        ? lastPerf
-                        : Storage().settings.getAircraft().trim();
-                    if (selector.isEmpty) {
-                      Toast.showToast(
-                        context,
-                        'Select an aircraft in Menu → Aircraft & Performance (dropdown)',
-                        const Icon(Icons.info_outline),
-                        4,
-                      );
-                      return;
-                    }
-                    try {
-                      final int alt = Storage().route.altitude;
-                      final int powerPct = Storage().settings.getPerformanceCruisePowerPercent();
-                      CruiseResult? r;
-                      try {
-                        final Aircraft dbAc = await UserDatabaseHelper.db.getAircraft(selector);
-                        r = PlanPerformanceHelper.cruiseAtPlanAltitude(dbAc, alt, powerPercent: powerPct);
-                      } catch (_) {}
-                      if (!context.mounted) return;
-                      r ??= PlanPerformanceHelper.cruiseForBuiltInDisplayName(selector, alt, powerPercent: powerPct);
-                      if (r == null) {
-                        Toast.showToast(
-                          context,
-                          'No cruise data: set aircraft Type (e.g. C172) or add a cruise table in My Aircraft',
-                          const Icon(Icons.warning_amber_rounded, color: Colors.orange),
-                          5,
-                        );
-                        return;
-                      }
-                      Storage().settings.setTas(r.ktas);
-                      Storage().settings.setFuelBurn(r.gph);
-                      setState(() {});
-                      Toast.showToast(
-                        context,
-                        'Loaded ASpd ${r.ktas.round()}, GPH ${r.gph.toStringAsFixed(1)} for $selector',
-                        const Icon(Icons.check_circle, color: Colors.green),
-                        3,
-                      );
-                    } catch (e) {
-                      if (!context.mounted) return;
-                      Toast.showToast(context, 'Could not load aircraft: $e', const Icon(Icons.error, color: Colors.red), 4);
-                    }
+                _planToolButton(
+                  icon: const Icon(Icons.add),
+                  tooltip: "Insert waypoint",
+                  onPressed: () {
+                    Storage().planSearch = true;
+                    MainScreenState.gotoFind();
                   },
                 ),
-                DropdownButtonHideUnderline(
+                Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: DropdownButtonHideUnderline(
                   child: DropdownButton2<String>(
-                    isDense: true,
                     buttonStyleData: ButtonStyleData(
+                      height: _planToolExtent,
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(_planToolExtent / 2),
                         border: Border.all(color: Theme.of(context).colorScheme.outline),
                       ),
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                    ),
+                    iconStyleData: IconStyleData(
+                      iconSize: 20,
+                      iconEnabledColor: Theme.of(context).colorScheme.onSurface,
                     ),
                     dropdownStyleData: DropdownStyleData(
                       decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
                     ),
+                    menuItemStyleData: const MenuItemStyleData(height: 44),
+                    style: Theme.of(context).textTheme.bodyLarge,
                     isExpanded: false,
                     value: "${Storage().route.fore.toString().padLeft(2, "0")}H",
                     items: ["06H", "12H", "24H"].map((String item) {
@@ -229,15 +212,25 @@ class PlanScreenState extends State<PlanScreen> {
                     },
                   ),
                 ),
-                const SizedBox(width: 4),
-                IconButton(
+                ),
+                _calcButton(),
+                _planToolButton(
                   icon: const Icon(Icons.analytics_outlined),
                   tooltip: "Navigation log and terrain",
-                  onPressed: () => showDialog(
-                    context: context,
-                    builder: (BuildContext context) => Dialog.fullscreen(child: _makeNavLog()),
-                  ),
+                  onPressed: () {
+                    PlanLineWidgetState.endEditing();
+                    showDialog(
+                      context: context,
+                      builder: (BuildContext context) => Dialog.fullscreen(child: _makeNavLog()),
+                    );
+                  },
                 ),
+                if (route.length > 0)
+                  _planToolButton(
+                    icon: const Icon(Icons.delete_outline),
+                    tooltip: "Delete entire plan",
+                    onPressed: _confirmDeleteEntirePlan,
+                  ),
               ],
             ),
           ),
@@ -258,6 +251,243 @@ class PlanScreenState extends State<PlanScreen> {
         ],
       ),
     );
+  }
+
+  Future<String> _planAircraftSelector() async {
+    // The aircraft chosen in the Aircraft & Performance dropdown. On a fresh
+    // install nothing was chosen yet and that screen shows the first built-in
+    // model, so resolve it the same way.
+    return (await Aircraft.resolveSelected()).name;
+  }
+
+  Future<AircraftPerformanceData?> _loadPlanPerformance(String selector) async {
+    AircraftPerformanceData? perf;
+    try {
+      final Aircraft dbAc = await UserDatabaseHelper.db.getAircraft(selector);
+      perf = PlanPerformanceHelper.performanceDataForAircraft(dbAc);
+    } catch (_) {}
+    if (perf != null && BestCruiseAltitude.altitudesFor(perf).isNotEmpty) {
+      return perf;
+    }
+    for (final AircraftPerformanceData builtIn in CommonAircraftData.all) {
+      if (builtIn.name == selector && BestCruiseAltitude.altitudesFor(builtIn).isNotEmpty) {
+        return builtIn;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _applyBestCruiseAltitude() async {
+    if (_findingBestAltitude) {
+      return;
+    }
+    setState(() => _findingBestAltitude = true);
+    try {
+      final String selector = await _planAircraftSelector();
+      if (selector.isEmpty) {
+        if (!mounted) return;
+        Toast.showToast(
+          context,
+          'Select an aircraft in Menu → Aircraft & Performance (dropdown)',
+          const Icon(Icons.info_outline),
+          4,
+        );
+        return;
+      }
+      // An airport moved to either end keeps field elevation, including a cruise
+      // altitude it had when it sat farther down the route.
+      Storage().route.applyEndpointFieldElevations();
+      final List<PlanLegTarget> legs = Storage().route.cruiseLegs();
+      if (legs.isEmpty) {
+        if (!mounted) return;
+        Toast.showToast(
+          context,
+          'Add a route with a destination first',
+          const Icon(Icons.info_outline),
+          4,
+        );
+        return;
+      }
+      final AircraftPerformanceData? perf = await _loadPlanPerformance(selector);
+      if (!mounted) return;
+      if (perf == null) {
+        Toast.showToast(
+          context,
+          'No cruise data: set aircraft Type (e.g. C172) or add a cruise table in My Aircraft',
+          const Icon(Icons.warning_amber_rounded, color: Colors.orange),
+          5,
+        );
+        return;
+      }
+      final List<int> altitudes = BestCruiseAltitude.altitudesFor(perf);
+      final int powerPct = Storage().settings.getPerformanceCruisePowerPercent();
+      final int fore = Storage().route.fore;
+      double? climbKt;
+      double? climbFpm;
+      try {
+        final Aircraft saved = await UserDatabaseHelper.db.getAircraft(selector);
+        final double? speed = double.tryParse(saved.bestClimbSpeed);
+        if (speed != null && speed > 0) {
+          final double knotsTo = Storage().units.knotsTo;
+          climbKt = knotsTo == 0 ? speed : speed / knotsTo;
+        }
+        final double? rate = double.tryParse(saved.bestClimbRate);
+        if (rate != null && rate > 0) {
+          climbFpm = rate;
+        }
+      } catch (_) {}
+      final AircraftPerformanceData? builtIn = CommonAircraftData.byName(selector);
+      if (builtIn != null) {
+        if ((climbKt == null || climbKt <= 0) && builtIn.bestClimbKt > 0) {
+          climbKt = builtIn.bestClimbKt;
+        }
+        if ((climbFpm == null || climbFpm <= 0) && builtIn.bestClimbFpm > 0) {
+          climbFpm = builtIn.bestClimbFpm;
+        }
+      }
+      if (!mounted) return;
+      final List<Destination> planned = Storage().route.getAllDestinations();
+      if (planned.length < 2) {
+        return;
+      }
+      final RouteTrack track = BestCruiseAltitude.buildTrack([
+        for (int index = 0; index < planned.length - 1; index++)
+          (from: planned[index].coordinate, to: planned[index + 1].coordinate),
+      ], spacingNm: BestCruiseAltitude.terrainSpacingNm);
+      List<double?> terrain = [];
+      try {
+        terrain = await AltitudeProfile.getAltitudeProfile(
+          track.points.map((({double nm, LatLng at}) point) => point.at).toList(),
+        );
+      } catch (_) {}
+      if (!mounted) return;
+      final int startAlt = legs.first.fromAltitudeFt;
+      final bool arrive = Storage().route.isArrivalAirport(legs.last.waypoint);
+      final int? field = arrive
+          ? Waypoint.airportFieldElevationFt(
+              legs.last.waypoint.planDestination.type,
+              legs.last.waypoint.planDestination.elevation,
+            )
+          : null;
+      final int endAlt = field ?? legs.last.waypoint.effectiveAltitude(Storage().route.altitude);
+      final int topAltitude = altitudes.reduce((int a, int b) => a > b ? a : b);
+      // Let the spinner paint before the route search runs on this isolate.
+      await Future<void>.delayed(Duration.zero);
+      if (!mounted) return;
+      final String foreString = fore.toString().padLeft(2, "0");
+      final Map<String, (double?, double?)> windMemo = {};
+      (double?, double?) windFor(LatLng point, int altitude) {
+        final String? station = WindsCache.locateNearestStation(point);
+        final String key = "$station|$altitude";
+        return windMemo.putIfAbsent(key, () {
+          final Object? stored = Storage().winds.get("$station${foreString}H");
+          return WindsCache.getWindAtAltitude(
+            altitude.toDouble(),
+            stored is WindsAloft ? stored : null,
+          );
+        });
+      }
+
+      final RouteCruiseResult result = BestCruiseAltitude.choose(
+        track: track,
+        terrainFt: terrain,
+        altitudesFt: altitudes,
+        startAltitudeFt: startAlt,
+        endAltitudeFt: endAlt,
+        arriveAtEnd: arrive,
+        climbTrueAirspeedKt: climbKt,
+        climbRateConstantFpm: climbFpm,
+        topAltitudeFt: topAltitude,
+        cruiseAt: (int altitude) => perf.getCruisePerformance(altitude, powerPct, 0),
+        windAt: windFor,
+        variationAt: (double nm) => _variationAlong(track, planned, nm),
+      );
+      final CruiseProfile? profile = result.profile;
+      if (profile == null) {
+        if (!mounted) return;
+        Toast.showToast(
+          context,
+          result.terrainShort
+              ? 'No cruise altitude clears terrain by 1,000 ft'
+              : 'Wind is too strong for cruise speed on these legs',
+          const Icon(Icons.warning_amber_rounded, color: Colors.orange),
+          5,
+        );
+        return;
+      }
+      if (legs.length == track.legEndNm.length) {
+        for (int index = 0; index < legs.length; index++) {
+          final PlanLegTarget leg = legs[index];
+          final double startNm = index == 0 ? 0 : track.legEndNm[index - 1];
+          final CruiseStep step = profile.stepAt(track.legEndNm[index]);
+          if (leg.fixIndex == null) {
+            leg.waypoint.navAltitudeFt = profile.stepAt((startNm + track.legEndNm[index]) / 2).altitudeFt;
+          }
+          if (leg.fixIndex == null && Storage().route.isArrivalAirport(leg.waypoint)) {
+            continue;
+          }
+          leg.waypoint.setLegCruise(
+            leg.fixIndex,
+            altitudeFt: step.altitudeFt,
+            ktas: step.ktas,
+            gph: step.gph,
+          );
+        }
+      }
+      Storage().route.applyEndpointFieldElevations();
+      Storage().route.cruiseProfile = profile;
+      Storage().route.update();
+      if (!mounted) return;
+      if (result.terrainShort) {
+        Toast.showToast(
+          context,
+          'No cruise altitude clears terrain by 1,000 ft',
+          const Icon(Icons.warning_amber_rounded, color: Colors.orange),
+          5,
+        );
+        return;
+      }
+      Toast.showToast(
+        context,
+        'Calculated altitudes for shortest flight time based on winds aloft and performance of $selector',
+        const Icon(Icons.check_circle, color: Colors.green),
+        5,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Toast.showToast(
+        context,
+        'Could not find a best altitude: $e',
+        const Icon(Icons.error, color: Colors.red),
+        4,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _findingBestAltitude = false);
+      }
+    }
+  }
+
+  /// Magnetic variation along [track], interpolated between the fixes.
+  double _variationAlong(RouteTrack track, List<Destination> fixes, double nm) {
+    if (fixes.length < 2 || track.legEndNm.isEmpty) {
+      return 0;
+    }
+    for (int index = 0; index < track.legEndNm.length && index + 1 < fixes.length; index++) {
+      final double end = track.legEndNm[index];
+      if (nm > end + 0.05 && index < track.legEndNm.length - 1) {
+        continue;
+      }
+      final double start = index == 0 ? 0 : track.legEndNm[index - 1];
+      final double? fromVariation = fixes[index].geoVariation;
+      final double? toVariation = fixes[index + 1].geoVariation;
+      final double begin = fromVariation ?? toVariation ?? 0;
+      final double finish = toVariation ?? fromVariation ?? 0;
+      final double span = end - start;
+      final double fraction = span <= 0.05 ? 0 : ((nm - start) / span).clamp(0.0, 1.0);
+      return begin + (finish - begin) * fraction;
+    }
+    return fixes.last.geoVariation ?? 0;
   }
 
   Widget _planButton() {
@@ -317,12 +547,14 @@ class PlanScreenState extends State<PlanScreen> {
             "Delete the entire plan? All waypoints will be removed. This cannot be undone."),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text("Cancel")),
-          FilledButton.tonal(
-            style: FilledButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text("Delete"),
+          ),
+          FilledButton(
+            autofocus: true,
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Cancel"),
           ),
         ],
       ),
@@ -333,35 +565,68 @@ class PlanScreenState extends State<PlanScreen> {
     });
   }
 
+  static const double _planToolExtent = 40;
+
+  ButtonStyle get _planToolStyle {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return IconButton.styleFrom(
+      iconSize: 22,
+      minimumSize: const Size(_planToolExtent, _planToolExtent),
+      fixedSize: const Size(_planToolExtent, _planToolExtent),
+      padding: EdgeInsets.zero,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      foregroundColor: scheme.onSurface,
+      disabledForegroundColor: scheme.onSurface.withAlpha(120),
+      side: BorderSide(color: scheme.outline),
+      shape: const CircleBorder(),
+    );
+  }
+
+  Widget _planToolButton({
+    required Widget icon,
+    required String tooltip,
+    required VoidCallback? onPressed,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: IconButton(
+        style: _planToolStyle,
+        tooltip: tooltip,
+        onPressed: onPressed,
+        icon: icon,
+      ),
+    );
+  }
+
+  Widget _calcButton() {
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: IconButton(
+        style: _planToolStyle,
+        tooltip: "Calculate altitudes",
+        onPressed: _findingBestAltitude ? null : _applyBestCruiseAltitude,
+        icon: _findingBestAltitude
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.height),
+      ),
+    );
+  }
+
   Widget _buildPlanEditor(PlanRoute route) {
     return Column(
       children: [
         Expanded(
           flex: 1,
-          child: ValueListenableBuilder<int>( // update in plan change
-            valueListenable: route.change,
-            builder: (context, value, _) {
-              return Stack(
-                children: [
-                  ListTile( // header
-                      key: Key(Storage().getKey()),
-                      leading: GestureDetector(child: Icon(Icons.add), onTap: () {
-                        Storage().planSearch = true;
-                        MainScreenState.gotoFind();
-                      },),
-                      title: PlanLineWidgetState.getHeading(),
-                      subtitle: PlanLineWidgetState.getFieldsFromCalculations(Storage().route.totalCalculations)),
-                  if (route.length > 0)
-                    Positioned(
-                      top: 0,
-                      right: 0,
-                      child: IconButton(
-                        icon: const Icon(Icons.delete_outline),
-                        tooltip: "Delete entire plan",
-                        onPressed: _confirmDeleteEntirePlan,
-                      ),
-                    ),
-                ],
+            child: _whileVisible(route.change, (context) {
+              return ListTile(
+                title: PlanLineWidgetState.getHeading(),
+                subtitle: PlanLineWidgetState.getFieldsFromCalculations(
+                  Storage().route.totalCalculations,
+                ),
               );
             }),
         ),
@@ -400,7 +665,7 @@ class PlanScreenState extends State<PlanScreen> {
                     for (int index = 0; index < route.length; index++)
                       ReorderableDelayedDragStartListener(
                         index: index,
-                        key: Key(index.toString()),
+                        key: ObjectKey(route.getWaypointAt(index)),
                         child: Dismissible(
                           background: Container(
                             alignment: Alignment.centerRight,
@@ -411,16 +676,14 @@ class PlanScreenState extends State<PlanScreen> {
                             ),
                             child: const Icon(Icons.delete, color: Colors.red),
                           ),
-                          key: Key(Storage().getKey()),
+                          key: ObjectKey(route.getWaypointAt(index)),
                           direction: DismissDirection.endToStart,
                           onDismissed: (direction) {
                             setState(() {
                               route.removeWaypointAt(index);
                             });
                           },
-                          child: ValueListenableBuilder<int>(
-                            valueListenable: route.change,
-                            builder: (context, value, _) {
+                          child: _whileVisible(route.change, (context) {
                               return Card(
                                 margin: const EdgeInsets.symmetric(vertical: 2),
                                 color: route.isCurrent(index)
@@ -436,8 +699,7 @@ class PlanScreenState extends State<PlanScreen> {
                                   },
                                 ),
                               );
-                            },
-                          ),
+                            }),
                         ),
                       ),
                   ],
@@ -452,9 +714,65 @@ class PlanScreenState extends State<PlanScreen> {
     );
   }
 
+  Widget _whileVisible(Listenable listenable, WidgetBuilder builder) {
+    return _LiveWhileVisible(
+      visible: _visible,
+      listenable: listenable,
+      builder: builder,
+    );
+  }
+
   Widget _makeNavLog() {
     return _NavLogContent();
   }
+}
+
+class _LiveWhileVisible extends StatefulWidget {
+  final bool visible;
+  final Listenable listenable;
+  final WidgetBuilder builder;
+
+  const _LiveWhileVisible({
+    required this.visible,
+    required this.listenable,
+    required this.builder,
+  });
+
+  @override
+  State<_LiveWhileVisible> createState() => _LiveWhileVisibleState();
+}
+
+class _LiveWhileVisibleState extends State<_LiveWhileVisible> {
+  @override
+  void initState() {
+    super.initState();
+    widget.listenable.addListener(_onTick);
+  }
+
+  @override
+  void didUpdateWidget(_LiveWhileVisible old) {
+    super.didUpdateWidget(old);
+    if (old.listenable != widget.listenable) {
+      old.listenable.removeListener(_onTick);
+      widget.listenable.addListener(_onTick);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.listenable.removeListener(_onTick);
+    super.dispose();
+  }
+
+  void _onTick() {
+    // Rebuilding the row drops the mobile keyboard that is editing altitude.
+    if (widget.visible && mounted && !PlanLineWidgetState.isEditing) {
+      setState(() {});
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(context);
 }
 
 class _NavLogContent extends StatefulWidget {
@@ -472,7 +790,20 @@ class _NavLogContentState extends State<_NavLogContent> {
   final TransformationController _tableZoomController = TransformationController();
 
   @override
+  void initState() {
+    super.initState();
+    Storage().winds.change.addListener(_onWinds);
+  }
+
+  void _onWinds() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
   void dispose() {
+    Storage().winds.change.removeListener(_onWinds);
     _tableZoomController.dispose();
     super.dispose();
   }
@@ -757,6 +1088,7 @@ class _NavLogContentState extends State<_NavLogContent> {
 
     final Color textColor = Theme.of(context).colorScheme.onSurface;
     final Color gridColor = textColor.withAlpha(50);
+    final List<double> planAltitudes = Storage().route.getPathNextAltitudes();
     final int planAltitude = Storage().route.altitude;
     final int fore = Storage().route.fore;
     
@@ -772,6 +1104,7 @@ class _NavLogContentState extends State<_NavLogContent> {
           textColor: textColor,
           gridColor: gridColor,
           elevationData: elevationData,
+          planAltitudes: planAltitudes,
           planAltitude: planAltitude,
           tapPosition: _tapPosition,
           path: path,
@@ -839,12 +1172,10 @@ class _NavLogContentState extends State<_NavLogContent> {
     const int maxColumns = 40;
     final int columnCount = math.min(maxColumns, path.length).toInt();
     final int fore = Storage().route.fore;
-    final int lastIndex = path.length - 1;
-    final double step = columnCount > 1 ? lastIndex / (columnCount - 1) : 0;
     final List<_WindFieldSample> samples = [];
 
     for(int column = 0; column < columnCount; column++) {
-      final int index = columnCount == 1 ? 0 : (column * step).round();
+      final int index = _pathIndexForColumn(column, columnCount, path.length);
       final LatLng coordinate = path[index];
       final double course = _courseAtPathIndex(path, index);
       for(final int altitude in altitudes) {
@@ -894,6 +1225,17 @@ class _NavLogContentState extends State<_NavLogContent> {
 
 }
 
+/// Route point behind a column of the wind chart. A column covers an equal slice
+/// of the route, so it samples the middle of that slice. Sampling the slice
+/// edges would pin the first and last columns to the airports.
+int _pathIndexForColumn(int column, int columns, int pathLength) {
+  final int lastIndex = pathLength - 1;
+  if(lastIndex <= 0 || columns <= 1) {
+    return 0;
+  }
+  return (((column + 0.5) / columns) * lastIndex).round().clamp(0, lastIndex);
+}
+
 class _WindFieldData {
   final List<_WindFieldSample> samples;
   final int columns;
@@ -920,6 +1262,7 @@ class _WindFieldDiagramPainter extends CustomPainter {
   final Color textColor;
   final Color gridColor;
   final List<double?>? elevationData;
+  final List<double> planAltitudes;
   final int planAltitude;
   final Offset? tapPosition;
   final List<LatLng>? path;
@@ -933,6 +1276,7 @@ class _WindFieldDiagramPainter extends CustomPainter {
     required this.textColor,
     required this.gridColor,
     this.elevationData,
+    this.planAltitudes = const [],
     this.planAltitude = 0,
     this.tapPosition,
     this.path,
@@ -1049,25 +1393,44 @@ class _WindFieldDiagramPainter extends CustomPainter {
         // No wind component: neutral gray
         color = const Color(0xFF1A1A1A);
       }
+      // Cells share edges. Edges on whole pixels with no anti-aliasing leave no
+      // darker seam where two cells meet.
       final Paint cellPaint = Paint()
         ..color = color
-        ..style = PaintingStyle.fill;
-      final double x = leftPadding + sample.column * cellWidth;
+        ..style = PaintingStyle.fill
+        ..isAntiAlias = false;
+      final double x0 = (leftPadding + sample.column * cellWidth).roundToDouble();
+      final double x1 = (leftPadding + (sample.column + 1) * cellWidth).roundToDouble();
       canvas.drawRect(
-        Rect.fromLTWH(x, bandTop, cellWidth, bandBottom - bandTop),
+        Rect.fromLTRB(x0, bandTop.roundToDouble(), x1, bandBottom.roundToDouble()),
         cellPaint,
       );
     }
 
-    // Draw plan altitude line
-    if(planAltitude > 0) {
+    // Draw the altitude flown. A short leg rises only as far as the climb has reached.
+    final Paint planLinePaint = Paint()
+      ..color = Colors.cyan
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    if(planAltitudes.length >= 2) {
+      final double step = chartWidth / (planAltitudes.length - 1);
+      double? lastX;
+      double? lastY;
+      for(int i = 0; i < planAltitudes.length; i++) {
+        final double x = leftPadding + i * step;
+        final double y = (topPadding + (maxAltitude - planAltitudes[i]) /
+            (maxAltitude - minAltitude) * chartHeight)
+            .clamp(topPadding, topPadding + chartHeight);
+        if(lastX != null && lastY != null) {
+          canvas.drawLine(Offset(lastX, lastY), Offset(x, y), planLinePaint);
+        }
+        lastX = x;
+        lastY = y;
+      }
+    } else if(planAltitude > 0) {
       final double planY = topPadding + (maxAltitude - planAltitude) /
           (maxAltitude - minAltitude) * chartHeight;
       if(planY >= topPadding && planY <= topPadding + chartHeight) {
-        final Paint planLinePaint = Paint()
-          ..color = Colors.cyan
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2;
         canvas.drawLine(
           Offset(leftPadding, planY),
           Offset(leftPadding + chartWidth, planY),
@@ -1077,48 +1440,58 @@ class _WindFieldDiagramPainter extends CustomPainter {
     }
 
     // Draw elevation curve overlay with color based on plan altitude
-    if(elevationData != null && elevationData!.isNotEmpty) {
+    if(elevationData != null && elevationData!.length >= 2) {
       final int length = elevationData!.length;
       final double step = chartWidth / (length - 1);
       
+      final Paint elevationOutline = Paint()
+        ..color = const Color(0xFF101418)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 5
+        ..strokeCap = StrokeCap.round;
       final Paint elevationPaint = Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2
+        ..strokeWidth = 2.5
         ..strokeCap = StrokeCap.round;
-      
-      // Draw segments colored by whether terrain is above or below plan altitude
-      double? lastX;
-      double? lastY;
+
+      // A missing sample breaks the line. X still follows the route, so a gap
+      // stays where the sample is missing instead of sliding the rest left.
+      final List<Offset> outline = [];
+      final List<Color> segmentColors = [];
+      Offset? previous;
       double? lastElevation;
-      
+      double? lastPlanAltitude;
       for(int i = 0; i < length; i++) {
         final double? elevation = elevationData![i];
-        if(elevation == null) continue;
-        
-        final double x = leftPadding + i * step;
-        final double y = topPadding + (maxAltitude - elevation) /
-            (maxAltitude - minAltitude) * chartHeight;
-        final double clampedY = y.clamp(topPadding, topPadding + chartHeight);
-        
-        if(lastX != null && lastY != null && lastElevation != null) {
-          // Color based on whether terrain is above or below plan altitude
-          // Red if terrain is at or above plan altitude (dangerous)
-          // Green if terrain is below plan altitude (safe)
-          final bool currentAbove = elevation >= planAltitude;
-          final bool lastAbove = lastElevation >= planAltitude;
-          
-          if(currentAbove || lastAbove) {
-            elevationPaint.color = Colors.red;
-          } else {
-            elevationPaint.color = Colors.green;
-          }
-          
-          canvas.drawLine(Offset(lastX, lastY), Offset(x, clampedY), elevationPaint);
+        if(elevation == null) {
+          previous = null;
+          lastElevation = null;
+          lastPlanAltitude = null;
+          continue;
         }
-        
-        lastX = x;
-        lastY = clampedY;
+        final double x = leftPadding + i * step;
+        final double y = (topPadding + (maxAltitude - elevation) /
+            (maxAltitude - minAltitude) * chartHeight)
+            .clamp(topPadding, topPadding + chartHeight);
+        final Offset point = Offset(x, y);
+        final double legAltitude = _planAltitudeAt(i, length);
+        if(previous != null && lastElevation != null && lastPlanAltitude != null) {
+          final bool currentAbove = elevation >= legAltitude;
+          final bool lastAbove = lastElevation >= lastPlanAltitude;
+          outline.add(previous);
+          outline.add(point);
+          segmentColors.add((currentAbove || lastAbove) ? Colors.red : Colors.green);
+        }
+        previous = point;
         lastElevation = elevation;
+        lastPlanAltitude = legAltitude;
+      }
+      for(int i = 0; i < segmentColors.length; i++) {
+        canvas.drawLine(outline[i * 2], outline[i * 2 + 1], elevationOutline);
+      }
+      for(int i = 0; i < segmentColors.length; i++) {
+        elevationPaint.color = segmentColors[i];
+        canvas.drawLine(outline[i * 2], outline[i * 2 + 1], elevationPaint);
       }
     }
 
@@ -1129,6 +1502,18 @@ class _WindFieldDiagramPainter extends CustomPainter {
     _drawTapTooltip(canvas, size, leftPadding, topPadding, chartWidth, chartHeight, minAltitude, maxAltitude);
   }
   
+  double _planAltitudeAt(int index, int length) {
+    if(planAltitudes.length == length && length > 0) {
+      return planAltitudes[index.clamp(0, length - 1)];
+    }
+    if(planAltitudes.length >= 2 && length > 1) {
+      final double fraction = index / (length - 1);
+      final int sample = (fraction * (planAltitudes.length - 1)).round().clamp(0, planAltitudes.length - 1);
+      return planAltitudes[sample];
+    }
+    return planAltitude.toDouble();
+  }
+
   void _drawWaypoints(Canvas canvas, double leftPadding, double topPadding, 
       double chartWidth, double chartHeight) {
     if (waypoints.isEmpty) return;
@@ -1172,9 +1557,7 @@ class _WindFieldDiagramPainter extends CustomPainter {
     final int tappedColumn = ((tapX - leftPadding) / cellWidth).floor().clamp(0, columns - 1);
     
     // Calculate path index using the same formula as _buildWindFieldData
-    final int lastIndex = path!.length - 1;
-    final double step = columns > 1 ? lastIndex / (columns - 1) : 0;
-    final int pathIndex = columns == 1 ? 0 : (tappedColumn * step).round().clamp(0, lastIndex);
+    final int pathIndex = _pathIndexForColumn(tappedColumn, columns, path!.length);
     final LatLng coordinate = path![pathIndex];
     
     // Calculate altitude at tap position and snap to nearest altitude band
@@ -1351,6 +1734,21 @@ class _WindFieldDiagramPainter extends CustomPainter {
     }
   }
 
+  static bool _sameAltitudes(List<double> a, List<double> b) {
+    if (identical(a, b)) {
+      return true;
+    }
+    if (a.length != b.length) {
+      return false;
+    }
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   static String _formatAltitudeLabel(int altitude) {
     if(altitude == 0) {
       return "0";
@@ -1362,6 +1760,7 @@ class _WindFieldDiagramPainter extends CustomPainter {
   bool shouldRepaint(covariant _WindFieldDiagramPainter oldDelegate) {
     return oldDelegate.elevationData != elevationData ||
            oldDelegate.planAltitude != planAltitude ||
+           !_sameAltitudes(oldDelegate.planAltitudes, planAltitudes) ||
            oldDelegate.samples != samples ||
            oldDelegate.columns != columns ||
            oldDelegate.tapPosition != tapPosition;

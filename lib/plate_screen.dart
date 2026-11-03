@@ -207,6 +207,18 @@ class PlateScreenState extends State<PlateScreen> {
       return;
     }
     Storage().route.addWaypoint(Waypoint(procedure));
+    final List<ProcedureProfilePoint> profile =
+        await MainDatabaseHelper.db.findProcedureProfile(procedureName);
+    if (!mounted) {
+      return;
+    }
+    Storage().route.applyProcedureProfileAltitudes(
+      procedure.locationID,
+      [
+        for (final ProcedureProfilePoint point in profile)
+          (fix: point.fixIdentifier, altitudeFt: point.altitudeFt),
+      ],
+    );
     Toast.showToast(
         context, "Added ${procedure.facilityName} to Plan", null, 3);
   }
@@ -329,10 +341,19 @@ class PlateScreenState extends State<PlateScreen> {
   String _terrainCacheKey = "";
   int _terrainLoadId = 0;
   final TransformationController _transformationController = TransformationController();
+  static PlateScreenState? _active;
+  bool _visible = false;
+  // landing and plate sync both switch the airport while this screen is up
+  final Listenable _plateScreenReload = Listenable.merge([
+    Storage().flightStatus.flightStateChange,
+    Storage().plateAirportChange,
+  ]);
 
   @override
   void initState() {
     super.initState();
+    _active = this;
+    _visible = true;
     _transformationController.value = Storage().plateTransform;
     _transformationController.addListener(_onTransformChanged);
   }
@@ -343,6 +364,9 @@ class PlateScreenState extends State<PlateScreen> {
 
   @override
   void dispose() {
+    if (identical(_active, this)) {
+      _active = null;
+    }
     _transformationController.removeListener(_onTransformChanged);
     _transformationController.dispose();
     super.dispose();
@@ -353,8 +377,8 @@ class PlateScreenState extends State<PlateScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // this is to listen for landing event, show airport diagram on landing when this screen shows
-    return ValueListenableBuilder(valueListenable: Storage().flightStatus.flightStateChange, builder: (BuildContext context, int value, Widget? child) {
+    // landing and plate sync switch the airport from outside this screen
+    return AnimatedBuilder(animation: _plateScreenReload, builder: (BuildContext context, Widget? child) {
       return FutureBuilder(
         future: PlatesFuture().getAll(),
         builder: (context, snapshot) {
@@ -371,14 +395,47 @@ class PlateScreenState extends State<PlateScreen> {
 
   // on change of airport, reload first item of the new airport
   Future _loadPlate() async {
-    // load plate in background
+    // load plate in background. If the airport changed while this was loading
+    // (landing or plate sync), leave lastPlateAirport clear so the next build
+    // selects the new airport's plate instead of keeping this one.
+    final String airport = Storage().settings.getCurrentPlateAirport();
+    final String plate = Storage().currentPlate;
     await Storage().loadPlate();
-    Storage().lastPlateAirport = Storage().settings.getCurrentPlateAirport();
+    if(!mounted) {
+      return;
+    }
+    if(Storage().settings.getCurrentPlateAirport() != airport || Storage().currentPlate != plate) {
+      return;
+    }
+    Storage().lastPlateAirport = airport;
     _refreshTerrainOverlay();
   }
 
 
+  /// Plate stays mounted under Map. GPS own-ship updates wait until this tab
+  /// is showing.
+  static void setVisible(bool visible) {
+    _active?._setVisible(visible);
+  }
+
+  void _setVisible(bool visible) {
+    if (_visible == visible) {
+      return;
+    }
+    _visible = visible;
+    if (!mounted) {
+      return;
+    }
+    if (visible) {
+      _notifyPaint();
+    }
+    setState(() {});
+  }
+
   void _notifyPaint() {
+    if (!_visible) {
+      return;
+    }
     _notifier.value++;
   }
 
@@ -647,79 +704,97 @@ class PlateScreenState extends State<PlateScreen> {
 
           // Instruments overlay (full screen, free-floating draggable tiles)
           if(Storage().settings.isInstrumentsVisiblePlate())
-            const Positioned.fill(child: InstrumentList()),
+            Positioned.fill(child: InstrumentList(active: _visible)),
 
-          // Instrument toggle button (top right)
+          // Instrument, landing, and sync toggles share one column so the circles line up.
           Positioned(
             top: 8,
             right: 8,
-            child: Container(
-              decoration: BoxDecoration(
-                color: overlayBg,
-                shape: BoxShape.circle,
-              ),
-              child: IconButton(
-                onPressed: () {
-                  setState(() {
-                    Storage().settings.setInstrumentsVisiblePlate(!Storage().settings.isInstrumentsVisiblePlate());
-                  });
-                },
-                icon: Icon(
-                  Storage().settings.isInstrumentsVisiblePlate() ? MdiIcons.arrowCollapseRight : MdiIcons.arrowCollapseLeft,
-                  size: 20,
-                ),
-                tooltip: Storage().settings.isInstrumentsVisiblePlate() ? "Hide instruments" : "Show instruments",
-              ),
-            ),
-          ),
-
-          // Auto-show airport diagram toggle (top right, below instruments toggle)
-          if (!notAd)
-            Positioned(
-              top: 60, // sit below the show/hide instruments button (~48px tall at top:8)
-              right: 12,
-              child: GestureDetector(
-                onTap: () {
-                  setState(() {
-                    bool show = Storage().settings.isShowAirportDiagramOnLanding();
-                    Toast.showToast(
-                      context,
-                      show ? "Airport diagram auto switch disabled" : "Airport diagram will be shown automatically on landing",
-                      null,
-                      3,
-                    );
-                    Storage().settings.setShowAirportDiagramOnLanding(!show);
-                  });
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
                   decoration: BoxDecoration(
                     color: overlayBg,
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    Storage().settings.isShowAirportDiagramOnLanding() ? Icons.flight_land : Icons.flight_land_outlined,
-                    size: 24,
-                    color: Storage().settings.isShowAirportDiagramOnLanding() ? Theme.of(context).colorScheme.primary : null,
+                  child: IconButton(
+                    onPressed: () {
+                      setState(() {
+                        Storage().settings.setInstrumentsVisiblePlate(!Storage().settings.isInstrumentsVisiblePlate());
+                      });
+                    },
+                    icon: Icon(
+                      Storage().settings.isInstrumentsVisiblePlate() ? MdiIcons.arrowCollapseRight : MdiIcons.arrowCollapseLeft,
+                      size: 20,
+                    ),
+                    tooltip: Storage().settings.isInstrumentsVisiblePlate() ? "Hide instruments" : "Show instruments",
                   ),
                 ),
-              ),
+                if (!notAd) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: overlayBg,
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      tooltip: "Airport diagram on landing",
+                      onPressed: () {
+                        setState(() {
+                          Storage().settings.setShowAirportDiagramOnLanding(!Storage().settings.isShowAirportDiagramOnLanding());
+                          Toast.showToast(
+                            context,
+                            Storage().settings.isShowAirportDiagramOnLanding() ?  "Airport diagram will be shown automatically on landing" : "Airport diagram auto switch disabled",
+                            null,
+                            3,
+                          );
+                        });
+                      },
+                      icon: Icon(Storage().settings.isShowAirportDiagramOnLanding() ? Icons.flight_land : Icons.flight_rounded, size: 20),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: overlayBg,
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      tooltip: "Sync plates with the active waypoint",
+                      onPressed: () {
+                        setState(() {
+                          Storage().settings.setSyncPlateToActiveWaypoint(!Storage().settings.isSyncPlateToActiveWaypoint());
+                          Toast.showToast(
+                            context,
+                            Storage().settings.isSyncPlateToActiveWaypoint() ?  "Sync plates with the current waypoint" : "Disconnect plates from the current waypoint",
+                            null,
+                            3,
+                          );
+                        });
+                      },
+                      icon: Icon(Storage().settings.isSyncPlateToActiveWaypoint() ? Icons.sync : Icons.sync_disabled_sharp, size: 20),
+                    ),
+                  ),
+                ],
+              ],
             ),
+          ),
 
-          // Center button (bottom center)
+          // Center button (bottom center). Same spot and size as Center on the Map.
           Positioned(
-            bottom: Constants.bottomPaddingSize(context) + 8,
+            bottom: Constants.bottomPaddingSize(context),
             left: 0,
             right: 0,
-            child: Center(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: overlayBg,
-                  borderRadius: BorderRadius.circular(16),
-                ),
+            child: SizedBox(
+              height: Constants.bottomRowHeight,
+              child: Center(
                 child: TextButton(
                   style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    padding: const EdgeInsets.all(5.0),
+                    textStyle: const TextStyle(fontSize: Constants.bottomLabelSize),
+                    minimumSize: const Size(Constants.bottomButtonWidth, Constants.bottomButtonHeight),
+                    backgroundColor: overlayBg,
                   ),
                   onPressed: () {
                     final double currentScale = _transformationController.value.getMaxScaleOnAxis();
@@ -736,20 +811,36 @@ class PlateScreenState extends State<PlateScreen> {
 
           // Plate selector (bottom left)
           if (plates.isNotEmpty && plates[0].isNotEmpty)
+            // Same spot and size as Menu on the Map.
             Positioned(
-              bottom: Constants.bottomPaddingSize(context) + 8,
-              left: 12,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: overlayBg,
-                  shape: BoxShape.circle,
-                ),
-                child: DropdownButtonHideUnderline(
+              bottom: Constants.bottomPaddingSize(context),
+              left: Constants.bottomMenuLeft,
+              child: SizedBox(
+                height: Constants.bottomRowHeight,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+              DropdownButtonHideUnderline(
                   child: DropdownButton2<String>(
                     isDense: true,
-                    customButton: Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Icon(Icons.menu, color: Theme.of(context).colorScheme.primary),
+                    // A real TextButton laid out like the Map's Menu button (invisible
+                    // "Menu" label sizes it), so size, shape and padding are identical.
+                    customButton: IgnorePointer(
+                      child: TextButton(
+                        onPressed: () {},
+                        style: TextButton.styleFrom(
+                          textStyle: const TextStyle(fontSize: Constants.bottomLabelSize),
+                          minimumSize: const Size(Constants.bottomButtonWidth, Constants.bottomButtonHeight),
+                          backgroundColor: overlayBg,
+                        ),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            const Opacity(opacity: 0, child: Text("Menu")),
+                            Icon(Icons.menu, color: Theme.of(context).colorScheme.primary),
+                          ],
+                        ),
+                      ),
                     ),
                     buttonStyleData: ButtonStyleData(
                       decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), color: Colors.transparent),
@@ -824,6 +915,8 @@ class PlateScreenState extends State<PlateScreen> {
                     },
                   ),
                 ),
+                  ],
+                ),
               ),
             ),
 
@@ -877,10 +970,12 @@ class PlateScreenState extends State<PlateScreen> {
               ),
             ),
 
-          // Airport selector and procedures (bottom right)
+          // Airport selector and procedures (bottom right). The airport selector sits
+          // on the row of the Map's Settings / Layers buttons and ends where the
+          // Layers circle ends, with the procedures circle above Layers.
           Positioned(
-            bottom: Constants.bottomPaddingSize(context) + 8,
-            right: 8,
+            bottom: Constants.bottomPaddingSize(context),
+            right: Constants.bottomRightInset + Constants.bottomIconPadding,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.end,
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -899,7 +994,7 @@ class PlateScreenState extends State<PlateScreen> {
                         child: DropdownButton2<String>(
                           isDense: true,
                           customButton: Padding(
-                            padding: const EdgeInsets.all(6),
+                            padding: const EdgeInsets.all((Constants.bottomIconCircle - 24) / 2),
                             child: Icon(Icons.add_road, color: Theme.of(context).colorScheme.primary),
                           ),
                           buttonStyleData: ButtonStyleData(
@@ -932,6 +1027,11 @@ class PlateScreenState extends State<PlateScreen> {
 
                 // Airport selector
                 if (airports.isNotEmpty && airports[0].isNotEmpty)
+                  SizedBox(
+                    height: Constants.bottomRowHeight,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
                   Container(
                     decoration: BoxDecoration(
                       color: overlayBg,
@@ -973,6 +1073,9 @@ class PlateScreenState extends State<PlateScreen> {
                           });
                         },
                       ),
+                    ),
+                  ),
+                      ],
                     ),
                   ),
               ],
@@ -1018,7 +1121,10 @@ class PlateScreenState extends State<PlateScreen> {
                     ),
                   Stack(
                     children: [
-                      IgnorePointer(child: PlateProfileWidget(selectedProcedure: Storage().settings.getPlateProfile())),
+                      IgnorePointer(child: PlateProfileWidget(
+                        selectedProcedure: Storage().settings.getPlateProfile(),
+                        active: _visible,
+                      )),
                       Positioned(
                         top: 0,
                         right: 8,

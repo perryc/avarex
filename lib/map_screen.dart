@@ -33,6 +33,8 @@ import 'package:avaremp/weather/taf.dart';
 import 'package:avaremp/weather/tfr.dart';
 import 'package:avaremp/widgets/warnings_widget.dart';
 import 'package:avaremp/weather/weather.dart';
+import 'package:avaremp/weather/weather_cams.dart';
+import 'package:avaremp/weather/weather_cams_screen.dart';
 import 'package:avaremp/weather/winds_aloft.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -60,6 +62,9 @@ class MapScreen extends StatefulWidget {
 class MapScreenState extends State<MapScreen> {
 
   static const double iconRadius = 18;
+  // The map stays mounted while Plate is showing.
+  static MapScreenState? _active;
+  bool _visible = true;
 
   final List<String> _charts = DownloadScreenState.getCategories();
   LatLng? _previousPosition;
@@ -121,42 +126,78 @@ class MapScreenState extends State<MapScreen> {
   }
 
   void _metarListen() {
-    setState(() {
-      _metarCluster = null;
-    });
+    _metarCluster = null;
+    _rebuildIfVisible();
   }
 
   void _tafListen() {
-    setState(() {
-      _tafCluster = null;
-    });
+    _tafCluster = null;
+    _rebuildIfVisible();
   }
 
   void _airepListen() {
-    setState(() {
-      _airepCluster = null;
-    });
+    _airepCluster = null;
+    _rebuildIfVisible();
   }
 
   void _airSigmetListen() {
-    setState(() {
-      _airSigmetCluster = null;
-      _airSigmetLayer = null;
-    });
+    _airSigmetCluster = null;
+    _airSigmetLayer = null;
+    _rebuildIfVisible();
   }
 
   void _tfrListen() {
-    setState(() {
-      _tfrCluster = null;
-      _tfrLayer = null;
-    });
+    _tfrCluster = null;
+    _tfrLayer = null;
+    _rebuildIfVisible();
   }
 
   void _geoJsonListen() {
-    setState(() {
-      _geojsonCluster = null;
-      _geoJsonLayer = null;
-    });
+    _geojsonCluster = null;
+    _geoJsonLayer = null;
+    _rebuildIfVisible();
+  }
+
+  UiImageProvider? _plateImageProvider;
+
+  /// One provider per plate image, so rebuilds hand the Image widget the same
+  /// provider instead of a new one each time.
+  UiImageProvider _plateProvider(ui.Image image) {
+    final UiImageProvider? current = _plateImageProvider;
+    if (current != null && identical(current.image, image)) {
+      return current;
+    }
+    return _plateImageProvider = UiImageProvider(image);
+  }
+
+  // Weather still updates while Plate is up. Skip the rebuild until the map
+  // is on screen again.
+  void _rebuildIfVisible() {
+    if (_visible && mounted) {
+      setState(() {});
+    }
+  }
+
+  /// Called when the map tab is shown or covered. While covered, GPS moves and
+  /// weather rebuilds wait. Coming back leaves the chart where it was.
+  static void setVisible(bool visible) {
+    _active?._setVisible(visible);
+  }
+
+  void _setVisible(bool visible) {
+    if (_visible == visible) {
+      return;
+    }
+    _visible = visible;
+    if (!mounted) {
+      return;
+    }
+    if (visible) {
+      // Drop GPS deltas from while this tab was covered, so the chart does not
+      // jump by the distance flown on Plate.
+      _previousPosition = Gps.toLatLng(Storage().position);
+    }
+    setState(() {});
   }
 
   void _canadaAirspaceListen() {
@@ -168,8 +209,10 @@ class MapScreenState extends State<MapScreen> {
 
   @override
   void initState() {
+    _active = this;
     // move with airplane but do not hold the map
     Storage().gpsChange.addListener(_gpsListen);
+    Storage().northUpChange.addListener(_onNorthUp);
     Storage().metar.change.addListener(_metarListen);
     Storage().taf.change.addListener(_tafListen);
     Storage().airep.change.addListener(_airepListen);
@@ -185,8 +228,12 @@ class MapScreenState extends State<MapScreen> {
 
   @override
   void dispose() {
+    if (identical(_active, this)) {
+      _active = null;
+    }
     // save ptz when we switch out
     Storage().gpsChange.removeListener(_gpsListen);
+    Storage().northUpChange.removeListener(_onNorthUp);
     Storage().metar.change.removeListener(_metarListen);
     Storage().taf.change.removeListener(_tafListen);
     Storage().airep.change.removeListener(_airepListen);
@@ -247,6 +294,9 @@ class MapScreenState extends State<MapScreen> {
 
   // this pans camera on move
   void _gpsListen() {
+    if (!_visible) {
+      return;
+    }
     final LatLng cur = Gps.toLatLng(Storage().position);
     _previousPosition ??= cur;
     try {
@@ -271,6 +321,27 @@ class MapScreenState extends State<MapScreen> {
       setState(() {
         _cacheBustElevation++;
       });
+    }
+  }
+
+  // North-up keeps the chart fixed; track-up rotates it to the aircraft heading.
+  void _onNorthUp() {
+    if (!mounted) {
+      return;
+    }
+    final bool northUp = Storage().settings.getNorthUp();
+    setState(() {
+      _northUp = northUp;
+    });
+    try {
+      _controller.moveAndRotate(
+        _controller.camera.center,
+        _controller.camera.zoom,
+        northUp ? 0 : -Storage().position.heading,
+      );
+    }
+    catch (e) {
+      AppLog.logMessage("MapScreen: orientation toggle error $e");
     }
   }
 
@@ -490,6 +561,54 @@ class MapScreenState extends State<MapScreen> {
           ],
         );
     return _tfrCluster!;
+  }
+
+  // FAA weather camera sites. The list is fetched the first time the layer is
+  // on; the markers are built once it arrives.
+  MarkerClusterLayerWidget? _camCluster;
+  bool _camsLoading = false;
+  DateTime? _camsFailed;
+
+  void _loadCams() {
+    if (_camsLoading || !WeatherCams.available) {
+      return;
+    }
+    final DateTime? failed = _camsFailed;
+    if (failed != null && DateTime.now().difference(failed) < const Duration(minutes: 1)) {
+      return; // do not hammer the service while it is down
+    }
+    _camsLoading = true;
+    WeatherCams.loadSites().then((_) {
+      _camsFailed = null;
+      _camCluster = null;
+    }).catchError((Object e) {
+      _camsFailed = DateTime.now();
+      AppLog.logMessage("Weather cams unavailable: $e");
+    }).whenComplete(() {
+      _camsLoading = false;
+      _rebuildIfVisible();
+    });
+  }
+
+  Widget? _makeCamCluster() {
+    final List<WeatherCamSite>? sites = WeatherCams.cachedSites;
+    if (sites == null) {
+      _loadCams();
+      return null;
+    }
+    _camCluster ??= makeCluster([
+      for (final WeatherCamSite s in sites)
+        Marker(
+          point: s.coordinate,
+          alignment: Alignment.center,
+          child: GestureDetector(
+            onTap: () => WeatherCamsScreen.open(context, s),
+            child: Icon(Icons.videocam,
+                color: s.inMaintenance ? Colors.grey : Colors.black),
+          ),
+        ),
+    ]);
+    return _camCluster;
   }
 
   MarkerClusterLayerWidget? _geojsonCluster;
@@ -867,6 +986,17 @@ class MapScreenState extends State<MapScreen> {
       }
     }
 
+    lIndex = _layers.indexOf(WeatherCams.layerName);
+    if (lIndex >= 0) {
+      opacity = _layersOpacity[lIndex];
+      if (opacity > 0) {
+        final Widget? cams = _makeCamCluster();
+        if (cams != null) {
+          layers.add(Opacity(opacity: opacity, child: cams));
+        }
+      }
+    }
+
     lIndex = _layers.indexOf('Plate');
     opacity = _layersOpacity[lIndex];
     if (opacity > 0) {
@@ -884,7 +1014,9 @@ class MapScreenState extends State<MapScreen> {
                           Storage().topLeftPlate!,
                           Storage().bottomRightPlate!
                       ),
-                      imageProvider: UiImageProvider(Storage().imagePlate!),
+                      imageProvider: _plateProvider(Storage().imagePlate!),
+                      // Keep the last frame up while the image is reloaded.
+                      gaplessPlayback: true,
                     ),
                 ],
               );
@@ -1479,7 +1611,7 @@ class MapScreenState extends State<MapScreen> {
                         )
                     )
                 ),
-              Positioned.fill(child: RepaintBoundary(child: InstrumentList(key: ValueKey<int>(_profileGeneration)))),
+              Positioned.fill(child: RepaintBoundary(child: InstrumentList(key: ValueKey<int>(_profileGeneration), active: _visible))),
               // warn
               Positioned(
                 child: Align(
@@ -1493,46 +1625,52 @@ class MapScreenState extends State<MapScreen> {
                             builder: (context, value, _) {
                               return WarningsButtonWidget(warning: value);
                             }
-                        )]
-                        )
+                          ),
+                          if(showAltitudeSlider)
+                            RotatedBox(quarterTurns: -1, child:
+                              SizedBox(width: 192, height: 64, child:
+                                SliderTheme(
+                                  data: SliderTheme.of(context).copyWith(
+                                    // Indicator grows with the altitude label.
+                                    valueIndicatorShape: const RectangularSliderValueIndicatorShape(),
+                                    valueIndicatorColor: Theme.of(context).colorScheme.primary,
+                                    valueIndicatorTextStyle: TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w600,
+                                      color: Theme.of(context).colorScheme.onPrimary,
+                                    ),
+                                  ),
+                                  child: Slider(
+                                    label: "${(Storage().route.altitude / 1000).toInt()}K ft",
+                                    max: 30000,
+                                    min: 0,
+                                    divisions: 30,
+                                    value: Storage().route.altitude.toDouble(),
+                                    onChanged: (double value) {
+                                      setState(() {
+                                        Storage().route.altitude = value.toInt();
+                                      });
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ])
                     )
 
                 ),
               ),
-              if(showAltitudeSlider)
-              Positioned(
-                child: Align(
-                    alignment: Alignment.bottomRight,
-                    child: Padding(
-                        padding: EdgeInsets.fromLTRB(5, 5, 5, Constants.bottomPaddingSize(context) + iconRadius * 2 + 10), // buttons under have 5 padding and radius
-                        child: RotatedBox(quarterTurns: -1, child:
-                          SizedBox(width: 192, height: 64, child:
-                            Slider(
-                              label: "${(Storage().route.altitude / 1000).toInt()}K ft",
-                              max: 30000,
-                              min: 0,
-                              divisions: 30,
-                              value: Storage().route.altitude.toDouble(),
-                              onChanged: (double value) {
-                                setState(() {
-                                  Storage().route.altitude = value.toInt();
-                                });
-                              },
-                            ),
-                          ),
-                        ),
-                      )
-                    )
-                ),
               Positioned(
                   child: Align(
                       alignment: Alignment.bottomCenter,
                       child: Padding(
                           padding: EdgeInsets.fromLTRB(5, 5, 5, Constants.bottomPaddingSize(context)),
                           // same box height as the icon row on the right so the labels line up with the circle buttons
-                          child: SizedBox(height: iconRadius * 2 + 16, child: Center(child: TextButton(
+                          child: SizedBox(height: Constants.bottomRowHeight, child: Center(child: TextButton(
                             style: TextButton.styleFrom(
                               padding: const EdgeInsets.all(5.0),
+                              textStyle: const TextStyle(fontSize: Constants.bottomLabelSize),
+                              minimumSize: const Size(Constants.bottomButtonWidth, Constants.bottomButtonHeight),
                               backgroundColor: Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.7),
                             ),
                             onPressed: () {
@@ -1567,9 +1705,9 @@ class MapScreenState extends State<MapScreen> {
                   child: Align(
                       alignment: Alignment.bottomLeft,
                       child: Padding(
-                          padding: EdgeInsets.fromLTRB(35, 0, 0, Constants.bottomPaddingSize(context)),
+                          padding: EdgeInsets.fromLTRB(Constants.bottomMenuLeft, 0, 0, Constants.bottomPaddingSize(context)),
                           // same box height as the icon row on the right so the labels line up with the circle buttons
-                          child: SizedBox(height: iconRadius * 2 + 16, child: Row(children:[
+                          child: SizedBox(height: Constants.bottomRowHeight, child: Row(children:[
                             // menu
                             TextButton(
                               onPressed: () {
@@ -1610,6 +1748,8 @@ class MapScreenState extends State<MapScreen> {
                                 }
                               },
                               style: TextButton.styleFrom(
+                                textStyle: const TextStyle(fontSize: Constants.bottomLabelSize),
+                                minimumSize: const Size(Constants.bottomButtonWidth, Constants.bottomButtonHeight),
                                 backgroundColor: Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.7)
                               ),
                               child: const Text("Menu"),
@@ -1623,26 +1763,29 @@ class MapScreenState extends State<MapScreen> {
                   child: Align(
                       alignment: Alignment.bottomRight,
                       child: Padding(
-                          padding: EdgeInsets.fromLTRB(0, 0, 5, Constants.bottomPaddingSize(context)),
+                          padding: EdgeInsets.fromLTRB(0, 0, Constants.bottomRightInset, Constants.bottomPaddingSize(context)),
                           child: SingleChildScrollView(scrollDirection: Axis.horizontal, child:
                               Row(mainAxisAlignment: MainAxisAlignment.end,
                                 children:[
                                   IconButton(
                                       tooltip: "Map settings",
-                                      icon: CircleAvatar(radius: iconRadius, backgroundColor: Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.7),
+                                      padding: const EdgeInsets.all(Constants.bottomIconPadding),
+                                      icon: CircleAvatar(radius: Constants.bottomIconCircle / 2, backgroundColor: Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.7),
                                           child: const Icon(Icons.settings)),
                                       onPressed: () => _showSettingSelector(context)),
 
                                   IconButton(
                                     tooltip: "Select the chart type",
-                                    icon: CircleAvatar(radius: iconRadius, backgroundColor: Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.7),
+                                    padding: const EdgeInsets.all(Constants.bottomIconPadding),
+                                      icon: CircleAvatar(radius: Constants.bottomIconCircle / 2, backgroundColor: Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.7),
                                         child: const Icon(Icons.map)),
                                     onPressed: () => _showChartSelector(context),
                                   ),
 
                                   IconButton(
                                     tooltip: "Select the layers to show on the Map screen",
-                                    icon: CircleAvatar(radius: iconRadius, backgroundColor: Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.7),
+                                    padding: const EdgeInsets.all(Constants.bottomIconPadding),
+                                      icon: CircleAvatar(radius: Constants.bottomIconCircle / 2, backgroundColor: Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.7),
                                         child: const Icon(Icons.layers)),
                                     onPressed: () => _showLayerSelector(context),
                                   ),
@@ -1700,10 +1843,7 @@ class MapScreenState extends State<MapScreen> {
         label: _northUp ? "North Up" : "Track Up",
         isOn: !_northUp,
         onTap: () {
-          setState(() {
-            _northUp = !_northUp;
-          });
-          Storage().settings.setNorthUp(_northUp); // save
+          Storage().toggleNorthUp();
         },
       ),
     ];
@@ -1827,6 +1967,7 @@ class MapScreenState extends State<MapScreen> {
       case "Game TFR": return MdiIcons.stadium;
       case "CA Airspace": return MdiIcons.leaf;
       case "CA Airports": return Icons.local_airport;
+      case "Cameras": return Icons.videocam;
       case "Traffic": return MdiIcons.airplaneTakeoff;
       case "Nav": return MdiIcons.navigation;
       case "Plate": return MdiIcons.fileDocument;

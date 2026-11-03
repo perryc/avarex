@@ -70,7 +70,7 @@ class LongPressFuture {
 class LongPressScreenState extends State<LongPressScreen> {
 
   int _index = 0;
-  static const List<String> labels = ["Main", "AD", "METAR", "NOTAM", "SUA", "Wind", "3D", "ST", "Business"];
+  static const List<String> labels = ["Main", "AD", "METAR", "NOTAM", "SUA", "Wind", "3D", "3DW", "ST", "Business"];
 
   late Future<LongPressFuture> _loadFuture;
 
@@ -344,6 +344,14 @@ class LongPressScreenState extends State<LongPressScreen> {
       center: showDestination.coordinate,
       ownship: Storage().gpsChange,
       showPressPoint: true,
+      showTerrain: true,
+    );
+    pages[labels.indexOf("3DW")] = Airspace3DView(
+      weather: true,
+      center: showDestination.coordinate,
+      ownship: Storage().gpsChange,
+      showPressPoint: true,
+      showTerrain: true,
     );
     pages[labels.indexOf("ST")] = Sounding.getSoundingImage(showDestination.coordinate, context);
 
@@ -446,9 +454,6 @@ class LongPressScreenState extends State<LongPressScreen> {
                     child: const Text("\u2192D", style: TextStyle(fontSize: 40),),
                     onPressed: () {
                       Storage().setDestination(showDestination);
-                      if (showDestination is AirportDestination) {
-                        Storage().settings.setCurrentPlateAirport(showDestination.locationID);
-                      }
                       MapScreenState.showOnMap(showDestination.coordinate);
                       MainScreenState.gotoMap();
                       Navigator.of(context).pop();

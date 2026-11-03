@@ -90,7 +90,7 @@ class UserDatabaseHelper {
     return
       await openDatabase(
           path,
-          version: 10,
+          version: 11,
           onUpgrade: (Database db, int oldVersion, int newVersion) async {
             if (oldVersion <= 4 && newVersion > 4) {
               await db.execute("create table aiQueries("
@@ -141,8 +141,16 @@ class UserDatabaseHelper {
                   "unique(name) on conflict replace);");
             }
 
-            // Migration to version 10: RTK-surveyed runways for precision approach.
+            // Migration to version 10: best climb speed and rate for plan Best.
             if (oldVersion <= 9 && newVersion > 9) {
+              await db.execute(
+                  "ALTER TABLE aircraft ADD COLUMN bestClimbSpeed TEXT DEFAULT '';");
+              await db.execute(
+                  "ALTER TABLE aircraft ADD COLUMN bestClimbRate TEXT DEFAULT '';");
+            }
+
+            // Migration to version 11: RTK-surveyed runways for precision approach.
+            if (oldVersion <= 10 && newVersion > 10) {
               await db.execute("create table if not exists runway_survey ("
                   "id           integer primary key autoincrement, "
                   "airport      text, "
@@ -263,6 +271,8 @@ class UserDatabaseHelper {
                 "picInfo      text, "
                 "sinkRate     text, "
                 "bestGlide    text, "
+                "bestClimbSpeed text, "
+                "bestClimbRate text, "
                 "fuelBurn     text, "
                 "base         text, "
                 "other        text, "

@@ -81,7 +81,7 @@ class AppSettings {
   // Default instrument tiles, in order. New tiles must be added here so they
   // become available to everyone (see getInstruments merge below).
   static const String _instrumentsDefault =
-      "GS,ALT,MT,PRV,NXT,DIS,BRG,GEL,ETA,ETE,VSR,UPT,DNT,UTC,SRC,FLT,ADSB";
+      "GS,ALT,MT,PRV,NXT,DIS,BRG,GEL,ETA,ETE,VSR,UPT,DNT,UTC,SRC,FLT,ADSB,RES";
 
   void setInstruments(String instruments) {
     provider.setString("key-instruments-v16", instruments);
@@ -199,21 +199,21 @@ class AppSettings {
   }
 
   List<String> getLayers() {
-    return (provider.getValue("key-layers-v54", defaultValue:
-        "Nav,Circles,Chart,Topo,Vector Map,CAP Grid,Elevation,Weather,TFR,CA Airspace,CA Airports,Game TFR,Plate,Traffic,Obstacles,Tape,GeoJSON,PFD,Tracks") as String).split(",");
+    return (provider.getValue("key-layers-v55", defaultValue:
+        "Nav,Circles,Chart,Topo,Vector Map,CAP Grid,Elevation,Weather,TFR,CA Airspace,CA Airports,Game TFR,Cameras,Plate,Traffic,Obstacles,Tape,GeoJSON,PFD,Tracks") as String).split(",");
   }
 
   void setLayers(List<String> layers) {
-    provider.setString("key-layers-v52", layers.join(","));
+    provider.setString("key-layers-v55", layers.join(","));
   }
 
   List<double> getLayersOpacity() {
-    return (provider.getValue("key-layers-opacity-v54", defaultValue:
-        "1,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0") as String).split(",").map((String e) => double.parse(e)).toList();
+    return (provider.getValue("key-layers-opacity-v55", defaultValue:
+        "1,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0") as String).split(",").map((String e) => double.parse(e)).toList();
   }
 
   void setLayersOpacity(List<double> opacity) {
-    provider.setString("key-layers-opacity-v54", opacity.map((double e) => e.toString()).toList().join(","));
+    provider.setString("key-layers-opacity-v55", opacity.map((double e) => e.toString()).toList().join(","));
   }
 
   void setBleDeviceId(String id) {
@@ -370,6 +370,14 @@ class AppSettings {
     provider.setBool("key-show-airport-diagram-on-landing", value);
   }
 
+  bool isSyncPlateToActiveWaypoint() {
+    return provider.getValue("key-sync-plate-to-active-waypoint", defaultValue: true) as bool;
+  }
+
+  void setSyncPlateToActiveWaypoint(bool value) {
+    provider.setBool("key-sync-plate-to-active-waypoint", value);
+  }
+
   double getInstrumentScaleFactor() {
     return provider.getValue("key-instrument-scale-factor", defaultValue: 1.0) as double;
   }
@@ -496,6 +504,24 @@ class AppSettings {
 
   void setDismissedAppNotices(String value) {
     provider.setString("key-dismissed-app-notices", value);
+  }
+
+  /// JSON list of Apps4Av messages kept on this device until the pilot deletes them.
+  String getSavedAppNotices() {
+    return provider.getValue("key-saved-app-notices", defaultValue: "") as String;
+  }
+
+  void setSavedAppNotices(String value) {
+    provider.setString("key-saved-app-notices", value);
+  }
+
+  /// Dismiss keys the pilot removed from Messages. A later edit is a new key.
+  String getDeletedAppNotices() {
+    return provider.getValue("key-deleted-app-notices", defaultValue: "") as String;
+  }
+
+  void setDeletedAppNotices(String value) {
+    provider.setString("key-deleted-app-notices", value);
   }
 
   // Identity and role for AvareX-to-AvareX plan sync on the local network.

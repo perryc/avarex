@@ -3,6 +3,7 @@ import 'package:avaremp/instruments/pfd_screen.dart';
 import 'package:avaremp/instruments/precision_approach_screen.dart';
 import 'package:avaremp/longpress_screen.dart';
 import 'package:avaremp/place/airspace_3d_screen.dart';
+import 'package:avaremp/place/weather_3d_screen.dart';
 import 'package:avaremp/plan/plan_action_screen.dart';
 import 'package:avaremp/services/app_check.dart';
 import 'package:avaremp/services/login_screen.dart';
@@ -26,6 +27,7 @@ import 'link/link_screen.dart';
 import 'main_screen.dart';
 import 'scheduler/scheduler_screen.dart';
 import 'onboarding_screen.dart';
+import 'services/app_notices_screen.dart';
 import 'services/backup_screen.dart';
 
 class CustomWidgetsBinding extends WidgetsFlutterBinding {
@@ -116,11 +118,13 @@ class MainApp extends StatelessWidget {
               if(Constants.shouldShowDeviceLink) '/link': (context) => const LinkScreen(),
               '/notes': (context) => const WritingScreen(),
               '/airspace3d': (context) => const Airspace3DScreen(),
+              '/weather3d': (context) => const Weather3DScreen(),
               '/pfd': (context) => const PfdScreen(),
               '/approach': (context) => const PrecisionApproachScreen(),
               '/plan_actions': (context) => const PlanActionScreen(),
               '/ai': (context) => const AiScreen(),
               '/backup': (context) => const BackupScreen(),
+              '/messages': (context) => const AppNoticesScreen(),
               '/community': (context) => const CommunityScreen(),
               '/scheduler': (context) => const SchedulerScreen(),
               '/popup': (context) {

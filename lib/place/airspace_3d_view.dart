@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:avaremp/constants.dart';
@@ -7,13 +9,23 @@ import 'package:avaremp/place/airspace_volume.dart';
 import 'package:avaremp/place/elevation_cache.dart';
 import 'package:avaremp/storage.dart';
 import 'package:avaremp/utils/path_utils.dart';
+import 'package:avaremp/weather/dafs_cache.dart';
 import 'package:avaremp/weather/game_tfr.dart';
+import 'package:avaremp/weather/lightning_cache.dart';
+import 'package:avaremp/weather/nexrad_level2.dart';
+import 'package:avaremp/weather/nexrad_volume_cache.dart';
 import 'package:avaremp/weather/tfr.dart';
+import 'package:avaremp/weather/weather_snapshot.dart';
+import 'package:avaremp/weather/wind_flow_3d.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart' hide Path;
 import 'package:universal_io/io.dart';
+
+part 'airspace_radar_layer.dart';
+part 'airspace_weather_layers.dart';
+part 'airspace_wind_layer.dart';
 
 /// Elevation samples over the 25 NM square. Row 0 is south, column 0 is west.
 class _AirspaceTerrain {
@@ -21,7 +33,8 @@ class _AirspaceTerrain {
   final int rows;
   final List<double?> elevFt;
 
-  const _AirspaceTerrain({required this.cols, required this.rows, required this.elevFt});
+  const _AirspaceTerrain(
+      {required this.cols, required this.rows, required this.elevFt});
 }
 
 /// One ADS-B target already converted into the 3D view.
@@ -107,7 +120,8 @@ int _clipCode(double east, double north, double radius) {
 /// Pieces of [points] that lie inside the 3D square. A leg that only crosses
 /// the view is cut at the edge instead of being dropped.
 @visibleForTesting
-List<List<NmPoint>> clipPathToView(List<NmPoint> points, {double radiusNm = airspaceViewRadiusNm}) {
+List<List<NmPoint>> clipPathToView(List<NmPoint> points,
+    {double radiusNm = airspaceViewRadiusNm}) {
   final pieces = <List<NmPoint>>[];
   List<NmPoint>? current;
   for (var i = 0; i < points.length - 1; i++) {
@@ -121,7 +135,67 @@ List<List<NmPoint>> clipPathToView(List<NmPoint> points, {double radiusNm = airs
     }
     final start = clipped.$1;
     final end = clipped.$2;
-    if (current == null || (current.last.e - start.e).abs() > 0.05 || (current.last.n - start.n).abs() > 0.05) {
+    if (current == null ||
+        (current.last.e - start.e).abs() > 0.05 ||
+        (current.last.n - start.n).abs() > 0.05) {
+      if (current != null) {
+        pieces.add(current);
+      }
+      current = [start, end];
+    } else {
+      current.add(end);
+    }
+  }
+  if (current != null) {
+    pieces.add(current);
+  }
+  return pieces;
+}
+
+class _AltNm {
+  final NmPoint point;
+  final double altitudeFt;
+
+  const _AltNm(this.point, this.altitudeFt);
+}
+
+double _altitudeOnSegment(_AltNm from, _AltNm to, NmPoint at) {
+  final double de = to.point.e - from.point.e;
+  final double dn = to.point.n - from.point.n;
+  final double length2 = de * de + dn * dn;
+  if (length2 <= 0) {
+    return from.altitudeFt;
+  }
+  final double t =
+      ((at.e - from.point.e) * de + (at.n - from.point.n) * dn) / length2;
+  return from.altitudeFt +
+      (to.altitudeFt - from.altitudeFt) * t.clamp(0.0, 1.0);
+}
+
+/// Same clipping as [clipPathToView], keeping each point's altitude.
+List<List<_AltNm>> _clipAltPath(List<_AltNm> points,
+    {double radiusNm = airspaceViewRadiusNm}) {
+  final List<List<_AltNm>> pieces = [];
+  List<_AltNm>? current;
+  for (int index = 0; index < points.length - 1; index++) {
+    final _AltNm from = points[index];
+    final _AltNm to = points[index + 1];
+    final (NmPoint, NmPoint)? clipped =
+        _clipSegment(from.point, to.point, radiusNm);
+    if (clipped == null) {
+      if (current != null) {
+        pieces.add(current);
+        current = null;
+      }
+      continue;
+    }
+    final _AltNm start =
+        _AltNm(clipped.$1, _altitudeOnSegment(from, to, clipped.$1));
+    final _AltNm end =
+        _AltNm(clipped.$2, _altitudeOnSegment(from, to, clipped.$2));
+    if (current == null ||
+        (current.last.point.e - start.point.e).abs() > 0.05 ||
+        (current.last.point.n - start.point.n).abs() > 0.05) {
       if (current != null) {
         pieces.add(current);
       }
@@ -155,7 +229,8 @@ bool glideRingHasReach(List<LatLng> points) {
   }
   final origin = points.first;
   for (final point in points.skip(1)) {
-    if ((point.latitude - origin.latitude).abs() > 1e-5 || (point.longitude - origin.longitude).abs() > 1e-5) {
+    if ((point.latitude - origin.latitude).abs() > 1e-5 ||
+        (point.longitude - origin.longitude).abs() > 1e-5) {
       return true;
     }
   }
@@ -164,12 +239,15 @@ bool glideRingHasReach(List<LatLng> points) {
 
 /// Ground height in feet at [east]/[north], or null when a sample is missing.
 @visibleForTesting
-double? sampleTerrainFt(List<double?> elevFt, int cols, int rows, double east, double north, double radius) {
+double? sampleTerrainFt(List<double?> elevFt, int cols, int rows, double east,
+    double north, double radius) {
   if (cols < 2 || rows < 2 || radius <= 0 || elevFt.length < cols * rows) {
     return null;
   }
-  final col = ((east + radius) / (2 * radius) * (cols - 1)).clamp(0.0, (cols - 1).toDouble());
-  final row = ((north + radius) / (2 * radius) * (rows - 1)).clamp(0.0, (rows - 1).toDouble());
+  final col = ((east + radius) / (2 * radius) * (cols - 1))
+      .clamp(0.0, (cols - 1).toDouble());
+  final row = ((north + radius) / (2 * radius) * (rows - 1))
+      .clamp(0.0, (rows - 1).toDouble());
   final col0 = col.floor();
   final row0 = row.floor();
   final col1 = math.min(col0 + 1, cols - 1);
@@ -183,57 +261,96 @@ double? sampleTerrainFt(List<double?> elevFt, int cols, int rows, double east, d
   }
   final tx = col - col0;
   final ty = row - row0;
-  return (h00 + (h10 - h00) * tx) + ((h01 + (h11 - h01) * tx) - (h00 + (h10 - h00) * tx)) * ty;
+  return (h00 + (h10 - h00) * tx) +
+      ((h01 + (h11 - h01) * tx) - (h00 + (h10 - h00) * tx)) * ty;
 }
 
-/// Feet for a TFR altitude string. Null when the text does not give a height.
-///
-/// A short value up to 180 is hundreds of feet (`050` is 5000). `UNL` uses the
-/// top of the 3D view.
+/// Published shelf floor, raised to the ground when the terrain is higher.
+/// Surface airspace is stored as 0 ft, which is sea level, not the hill under it.
 @visibleForTesting
-(double feet, bool unlimited)? parseTfrAltitude(String raw) {
-  final text = raw.trim().toUpperCase();
-  if (text.isEmpty || text.contains('NOTAM')) {
-    return null;
+double airspaceAboveGround(double floorFt, double? terrainFt) {
+  if (terrainFt == null || terrainFt <= floorFt) {
+    return floorFt;
   }
-  if (text == 'UNL' || text == 'UNLIMITED' || text == '999') {
-    return (airspaceDisplayCapFt, true);
-  }
-  if (text == 'SFC' || text == 'GND' || text == 'SURFACE' || text == '0') {
-    return (0, false);
-  }
-  final flightLevel = RegExp(r'^FL\s*(\d+)$').firstMatch(text);
-  if (flightLevel != null) {
-    return (double.parse(flightLevel.group(1)!) * 100, false);
-  }
-  final value = double.tryParse(text.replaceAll(',', ''));
-  if (value == null) {
-    return null;
-  }
-  if (value > 0 && value <= 180 && !text.contains('.') && text.length <= 3) {
-    return (value * 100, false);
-  }
-  return (value, false);
+  return terrainFt;
 }
 
-bool _layerOn(String name) {
-  try {
-    final layers = Storage().settings.getLayers();
-    final opacity = Storage().settings.getLayersOpacity();
-    final index = layers.indexOf(name);
-    return index >= 0 && index < opacity.length && opacity[index] > 0;
-  } catch (_) {
-    return false;
+/// [subject] cut to [clip]. [clip] may be clockwise or counterclockwise.
+@visibleForTesting
+List<NmPoint> clipRingToRing(List<NmPoint> subject, List<NmPoint> clip) {
+  final ring = _openRing(clip);
+  final start = _openRing(subject);
+  if (ring.length < 3 || start.length < 3) {
+    return const [];
   }
+  final ccw = _ringArea(ring) >= 0;
+  var output = start;
+  for (var i = 0; i < ring.length; i++) {
+    final a = ring[i];
+    final b = ring[(i + 1) % ring.length];
+    if ((a.e - b.e).abs() < 1e-9 && (a.n - b.n).abs() < 1e-9) {
+      continue;
+    }
+    final input = output;
+    output = <NmPoint>[];
+    if (input.isEmpty) {
+      return const [];
+    }
+    var previous = input.last;
+    for (final point in input) {
+      final inside = _ringSide(a, b, point, ccw);
+      final wasInside = _ringSide(a, b, previous, ccw);
+      if (inside) {
+        if (!wasInside) {
+          output.add(_ringHit(previous, point, a, b));
+        }
+        output.add(point);
+      } else if (wasInside) {
+        output.add(_ringHit(previous, point, a, b));
+      }
+      previous = point;
+    }
+  }
+  return _openRing(output);
 }
 
-bool _planInView(LatLng? center) {
-  if (center == null) {
-    return false;
+List<NmPoint> _openRing(List<NmPoint> ring) {
+  if (ring.length > 1 &&
+      (ring.first.e - ring.last.e).abs() < 1e-6 &&
+      (ring.first.n - ring.last.n).abs() < 1e-6) {
+    return ring.sublist(0, ring.length - 1);
   }
-  final route = Storage().route;
-  bool any(List<LatLng> path) => clipPathToView(_planOffsets(center, path)).isNotEmpty;
-  return any(route.getPathPassed()) || any(route.getPathCurrent()) || any(route.getPathNext());
+  return ring;
+}
+
+double _ringArea(List<NmPoint> ring) {
+  var area = 0.0;
+  for (var i = 0; i < ring.length; i++) {
+    final a = ring[i];
+    final b = ring[(i + 1) % ring.length];
+    area += a.e * b.n - b.e * a.n;
+  }
+  return area / 2;
+}
+
+bool _ringSide(NmPoint a, NmPoint b, NmPoint p, bool ccw) {
+  final cross = (b.e - a.e) * (p.n - a.n) - (b.n - a.n) * (p.e - a.e);
+  return ccw ? cross >= -1e-8 : cross <= 1e-8;
+}
+
+NmPoint _ringHit(NmPoint s, NmPoint e, NmPoint a, NmPoint b) {
+  final seE = e.e - s.e;
+  final seN = e.n - s.n;
+  final abE = b.e - a.e;
+  final abN = b.n - a.n;
+  final denom = seE * abN - seN * abE;
+  if (denom.abs() < 1e-12) {
+    return e;
+  }
+  final t = (((a.e - s.e) * abN - (a.n - s.n) * abE) / denom)
+      .clamp(0.0, 1.0)
+      .toDouble();
+  return NmPoint(s.e + seE * t, s.n + seN * t);
 }
 
 /// 3D Class B/C/D shelves and obstacles.
@@ -260,6 +377,11 @@ class Airspace3DView extends StatefulWidget {
   /// Draw ADS-B targets as dots.
   final bool showTraffic;
 
+  /// The 3D Weather screen: ownship, terrain, runway diagrams, winds aloft, and
+  /// 3D NEXRAD. No airspace, TFRs, plan, obstacles, glide, or traffic. Winds show
+  /// at once, and the radar is built from a button.
+  final bool weather;
+
   const Airspace3DView({
     super.key,
     this.center,
@@ -268,13 +390,15 @@ class Airspace3DView extends StatefulWidget {
     this.followAircraft = false,
     this.showTerrain = false,
     this.showTraffic = false,
+    this.weather = false,
   });
 
   /// Seeds the in-memory shelf cache so a test can open the view without the database path.
   @visibleForTesting
   static void debugSetScene(LatLng center, AirspaceScene? scene) {
-    _Airspace3DViewState._cacheKey =
-        scene == null ? null : '${center.latitude.toStringAsFixed(4)},${center.longitude.toStringAsFixed(4)}';
+    _Airspace3DViewState._cacheKey = scene == null
+        ? null
+        : '${center.latitude.toStringAsFixed(4)},${center.longitude.toStringAsFixed(4)}';
     _Airspace3DViewState._cache = scene;
   }
 
@@ -317,10 +441,38 @@ class _Airspace3DViewState extends State<Airspace3DView> {
   static bool _showSua = true;
   static bool _showTerrain = true;
 
+  /// Weather layers that are on. Per opening, so nothing is downloaded until its
+  /// button is pressed.
+  final Set<_WeatherLayer> _on = {};
+
+  /// Layers that were hidden because their build ran out. They show `Rebuild`.
+  final Set<_WeatherLayer> _expired = {};
+
+  /// Winds aloft show when the weather screen opens. The Wind button hides them.
+  bool _showWind = true;
+
+  /// Checks to skip after a press, so a build that is still starting is not judged old.
+  int _graceChecks = 0;
+  Timer? _lifeClock;
+
+  bool get _showRadar => _on.contains(_WeatherLayer.radar);
+
+  /// Kept between openings.
+  static double _radarMinDbz = 20;
+  static int _iceMin = 2;
+  static int _turbMin = 15;
+
   @override
   void initState() {
     super.initState();
     _attachTfr();
+    if (widget.weather) {
+      for (final layer in _WeatherLayer.values) {
+        _snapshotOf(layer).addListener(_onSnapshot);
+      }
+      _lifeClock =
+          Timer.periodic(const Duration(seconds: 15), (_) => _checkLife());
+    }
     _center = widget.center;
     if (widget.followAircraft) {
       Storage().gpsChange.addListener(_onGps);
@@ -339,7 +491,7 @@ class _Airspace3DViewState extends State<Airspace3DView> {
       _loading = false;
       return;
     }
-    final cached = _cached(_placeKey);
+    final cached = widget.weather ? null : _cached(_placeKey);
     if (cached != null) {
       _scene = cached;
       _loading = false;
@@ -353,6 +505,12 @@ class _Airspace3DViewState extends State<Airspace3DView> {
 
   @override
   void dispose() {
+    _lifeClock?.cancel();
+    if (widget.weather) {
+      for (final layer in _WeatherLayer.values) {
+        _snapshotOf(layer).removeListener(_onSnapshot);
+      }
+    }
     if (_tfrListening) {
       Storage().tfr.change.removeListener(_onTfr);
     }
@@ -368,7 +526,9 @@ class _Airspace3DViewState extends State<Airspace3DView> {
   @override
   void didUpdateWidget(Airspace3DView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.followAircraft || widget.center == null || oldWidget.center == null) {
+    if (widget.followAircraft ||
+        widget.center == null ||
+        oldWidget.center == null) {
       return;
     }
     if (oldWidget.center!.latitude == widget.center!.latitude &&
@@ -376,7 +536,10 @@ class _Airspace3DViewState extends State<Airspace3DView> {
       return;
     }
     _center = widget.center;
-    final cached = _cached(_placeKey);
+    if (widget.showTerrain) {
+      _loadTerrain(_center!);
+    }
+    final cached = widget.weather ? null : _cached(_placeKey);
     if (cached != null) {
       _scene = cached;
       _loading = false;
@@ -396,6 +559,63 @@ class _Airspace3DViewState extends State<Airspace3DView> {
     }
   }
 
+  /// A build has a limited life: 10 minutes for radar and lightning, an hour for the
+  /// icing and turbulence guidance. Then the layer is hidden until it is built
+  /// again, so an old picture is never mistaken for the current one.
+  void _checkLife() {
+    if (_graceChecks > 0) {
+      _graceChecks--;
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    final gone = [
+      for (final layer in _on)
+        if (!_snapshotOf(layer).loading && _snapshotOf(layer).expired) layer,
+    ];
+    if (gone.isNotEmpty) {
+      setState(() {
+        _on.removeAll(gone);
+        _expired.addAll(gone);
+      });
+    }
+  }
+
+  void _onSnapshot() {
+    if (mounted && _on.isNotEmpty) {
+      setState(() {});
+    }
+  }
+
+  /// Highest echo top in the loop, so the 3D box grows to hold the storm.
+  /// Zero when radar is off.
+  double get _radarTopFt {
+    final top = NexradVolumeCache.instance.echoTopFt;
+    if (!_showRadar || top <= 0) {
+      return 0;
+    }
+    return (math.min(top, 50000) / 2000).ceil() * 2000.0;
+  }
+
+  /// Highest icing or turbulence cell shown, up to [_hazardTopCapFt], so the box
+  /// holds it. Higher cells are clipped. Zero when neither is on.
+  double get _hazardTopFt {
+    var top = 0.0;
+    final ice = DafsCache.icing.grid;
+    if (_on.contains(_WeatherLayer.icing) && ice != null) {
+      top = math.max(top, ice.topFt(_iceMin));
+    }
+    final turb = DafsCache.turbulence.grid;
+    if (_on.contains(_WeatherLayer.turbulence) && turb != null) {
+      top = math.max(top, turb.topFt(_turbMin));
+    }
+    return (math.min(top, _hazardTopCapFt) / 2000).ceil() * 2000.0;
+  }
+
+  /// The box does not grow past this for icing and turbulence.
+  static const double _hazardTopCapFt = 18000;
+
   void _onTfr() {
     if (mounted) {
       setState(() {});
@@ -414,7 +634,9 @@ class _Airspace3DViewState extends State<Airspace3DView> {
     final center = _center;
     if (center != null) {
       final offset = ownshipOffsetNm(center, here);
-      if (offset != null && offset.e * offset.e + offset.n * offset.n < _recenterNm * _recenterNm) {
+      if (offset != null &&
+          offset.e * offset.e + offset.n * offset.n <
+              _recenterNm * _recenterNm) {
         return;
       }
     }
@@ -432,26 +654,36 @@ class _Airspace3DViewState extends State<Airspace3DView> {
 
   Future<void> _loadTerrain(LatLng center) async {
     final generation = ++_terrainGeneration;
-    final cosLat = math.cos(center.latitude * math.pi / 180).abs().clamp(0.2, 1.0);
+    final cosLat =
+        math.cos(center.latitude * math.pi / 180).abs().clamp(0.2, 1.0);
     final points = <LatLng>[];
     for (var row = 0; row < _terrainGrid; row++) {
-      final north = -airspaceViewRadiusNm + 2 * airspaceViewRadiusNm * row / (_terrainGrid - 1);
+      final north = -airspaceViewRadiusNm +
+          2 * airspaceViewRadiusNm * row / (_terrainGrid - 1);
       for (var col = 0; col < _terrainGrid; col++) {
-        final east = -airspaceViewRadiusNm + 2 * airspaceViewRadiusNm * col / (_terrainGrid - 1);
+        final east = -airspaceViewRadiusNm +
+            2 * airspaceViewRadiusNm * col / (_terrainGrid - 1);
         points.add(LatLng(
           center.latitude + north / 60.0,
           center.longitude + east / (60.0 * cosLat),
         ));
       }
     }
-    final heights = await ElevationCache.getElevationOfPoints(points);
+    List<double?> heights;
+    try {
+      heights = await ElevationCache.getElevationOfPoints(points);
+    } catch (_) {
+      // Elevation tiles are not available yet: draw without terrain.
+      heights = List<double?>.filled(points.length, null);
+    }
     if (!mounted || generation != _terrainGeneration) {
       return;
     }
     setState(() {
       _terrain = heights.every((height) => height == null)
           ? null
-          : _AirspaceTerrain(cols: _terrainGrid, rows: _terrainGrid, elevFt: heights);
+          : _AirspaceTerrain(
+              cols: _terrainGrid, rows: _terrainGrid, elevFt: heights);
     });
   }
 
@@ -494,6 +726,11 @@ class _Airspace3DViewState extends State<Airspace3DView> {
     return null;
   }
 
+  String get _nasrPath => PathUtils.getFilePath(
+        Storage().dataDir,
+        PathUtils.getFilePath('maps', 'nasr.mbtiles'),
+      );
+
   Future<void> _load() async {
     final center = _center;
     if (center == null) {
@@ -501,12 +738,24 @@ class _Airspace3DViewState extends State<Airspace3DView> {
     }
     final generation = ++_generation;
     final key = _placeKey;
-    final path = PathUtils.getFilePath(
-      Storage().dataDir,
-      PathUtils.getFilePath('maps', 'nasr.mbtiles'),
-    );
     AirspaceScene scene;
-    if (!File(path).existsSync()) {
+    if (widget.weather) {
+      // Needs no airspace tiles: only the runway diagrams from the main database.
+      var diagrams = const <AirspaceDiagram>[];
+      try {
+        final mainDb = PathUtils.getFilePath(Storage().dataDir, 'main.db');
+        if (File(mainDb).existsSync()) {
+          diagrams = await loadAirportDiagrams(mainDb, center);
+        }
+      } catch (_) {
+        // No database yet: the weather picture still works without runways.
+      }
+      scene = AirspaceScene(
+        radiusNm: airspaceViewRadiusNm,
+        shelves: const [],
+        diagrams: diagrams,
+      );
+    } else if (!File(_nasrPath).existsSync()) {
       scene = const AirspaceScene(
         radiusNm: airspaceViewRadiusNm,
         shelves: [],
@@ -514,19 +763,18 @@ class _Airspace3DViewState extends State<Airspace3DView> {
       );
     } else {
       // Yield so the progress indicator can paint before the tile decode.
-      scene = await Future(() => loadClassAirspace(path, center));
+      scene = await Future(() => loadClassAirspace(_nasrPath, center));
       if (scene.message == null) {
-        final obstacles = await loadObstacles(
-          PathUtils.getFilePath(Storage().dataDir, 'main.db'),
-          center,
-        );
-        scene = scene.copyWith(obstacles: obstacles);
+        final mainDb = PathUtils.getFilePath(Storage().dataDir, 'main.db');
+        final obstacles = await loadObstacles(mainDb, center);
+        final diagrams = await loadAirportDiagrams(mainDb, center);
+        scene = scene.copyWith(obstacles: obstacles, diagrams: diagrams);
       }
     }
     if (!mounted || generation != _generation) {
       return;
     }
-    if (scene.message == null) {
+    if (scene.message == null && !widget.weather) {
       _cache = scene;
       _cacheKey = key;
     }
@@ -563,15 +811,6 @@ class _Airspace3DViewState extends State<Airspace3DView> {
     if (scene.message != null) {
       return _message(context, scene.message!);
     }
-    if (scene.shelves.isEmpty &&
-        scene.obstacles.isEmpty &&
-        !widget.followAircraft &&
-        !_planInView(_center) &&
-        !_layerOn('TFR') &&
-        !_layerOn(GameTfr.layerName)) {
-      return _message(context, 'No Class B, C, or D, restricted, warning, prohibited, or MOA airspace within ${airspaceViewRadiusNm.round()} NM');
-    }
-
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
 
@@ -601,8 +840,10 @@ class _Airspace3DViewState extends State<Airspace3DView> {
                     _pitch = (_pitch + delta.dy * 0.008).clamp(0.2, 1.35);
                   }
                 } else {
-                  if ((details.scale - _lastScale).abs() > 0.0001 && _lastScale != 0) {
-                    _zoom = (_zoom * details.scale / _lastScale).clamp(0.4, 8.0);
+                  if ((details.scale - _lastScale).abs() > 0.0001 &&
+                      _lastScale != 0) {
+                    _zoom =
+                        (_zoom * details.scale / _lastScale).clamp(0.4, 8.0);
                   }
                   _lastScale = details.scale;
                   if (focal != null) {
@@ -621,7 +862,7 @@ class _Airspace3DViewState extends State<Airspace3DView> {
             child: _canvas(scene, dark, scheme),
           ),
         ),
-        _filters(scheme),
+        if (!widget.weather) _filters(scheme),
         Padding(
           padding: const EdgeInsets.fromLTRB(8, 2, 4, 2),
           child: Row(
@@ -648,42 +889,89 @@ class _Airspace3DViewState extends State<Airspace3DView> {
     if (center == null) {
       return const SizedBox.expand();
     }
+    final scaleAlt = _scaleAltitudeFt(scene);
     return Stack(
       fit: StackFit.expand,
       children: [
         CustomPaint(
-      painter: _AirspacePainter(
-        scene: scene,
-        center: center,
-        ownship: widget.followAircraft ? Storage().gpsChange : widget.ownship,
-        showPressPoint: widget.showPressPoint,
-        pitch: _pitch,
-        yaw: _yaw,
-        zoom: _zoom,
-        panX: _panX,
-        panY: _panY,
-        background: dark ? const Color(0xFF12171C) : const Color(0xFFEEF3F8),
-        gridColor: scheme.outline.withAlpha(110),
-        axisColor: scheme.onSurface.withAlpha(200),
-        hereColor: const Color(0xFFFF9800),
-        terrain: _terrain,
-        traffic: _traffic,
-        showClassB: _showB,
-        showClassC: _showC,
-        showClassD: _showD,
-        showTfr: _showTfr,
-        showGame: _showGame,
-        showPlan: _showPlan,
-        showObstacles: _showObstacles,
-        showSua: _showSua,
-        showTerrainMesh: _showTerrain,
-      ),
+          painter: _AirspacePainter(
+            scene: scene,
+            center: center,
+            ownship:
+                widget.followAircraft ? Storage().gpsChange : widget.ownship,
+            showPressPoint: widget.showPressPoint,
+            pitch: _pitch,
+            yaw: _yaw,
+            zoom: _zoom,
+            panX: _panX,
+            panY: _panY,
+            background:
+                dark ? const Color(0xFF12171C) : const Color(0xFFEEF3F8),
+            gridColor: scheme.outline.withAlpha(110),
+            axisColor: scheme.onSurface.withAlpha(200),
+            hereColor: const Color(0xFFFF9800),
+            terrain: _terrain,
+            traffic: _traffic,
+            showClassB: _showB && !widget.weather,
+            showClassC: _showC && !widget.weather,
+            showClassD: _showD && !widget.weather,
+            showTfr: _showTfr && !widget.weather,
+            showGame: _showGame && !widget.weather,
+            showPlan: _showPlan && !widget.weather,
+            showObstacles: _showObstacles && !widget.weather,
+            showSua: _showSua && !widget.weather,
+            showTerrainMesh: _terrainOn,
+            showGlide: !widget.weather,
+            terrainByOwnship: !widget.weather,
+            extraTopFt: _extraTopFt,
+          ),
           child: const SizedBox.expand(),
         ),
+        if (widget.weather && _showWind)
+          _AirspaceWindLayer(
+            center: center,
+            radiusNm: scene.radiusNm,
+            maxAltitudeFt: scaleAlt,
+            pitch: _pitch,
+            yaw: _yaw,
+            zoom: _zoom,
+            panX: _panX,
+            panY: _panY,
+            terrain: _terrain,
+          ),
+        if (widget.weather && _showRadar)
+          _AirspaceRadarLayer(
+            center: center,
+            radiusNm: scene.radiusNm,
+            maxAltitudeFt: scaleAlt,
+            minDbz: _radarMinDbz,
+            pitch: _pitch,
+            yaw: _yaw,
+            zoom: _zoom,
+            panX: _panX,
+            panY: _panY,
+            terrain: _terrainOn ? _terrain : null,
+          ),
+        if (widget.weather && _on.contains(_WeatherLayer.turbulence))
+          _hazardLayer(Hazard.turbulence, _turbMin, center, scene, scaleAlt),
+        if (widget.weather && _on.contains(_WeatherLayer.icing))
+          _hazardLayer(Hazard.icing, _iceMin, center, scene, scaleAlt),
+        if (widget.weather && _on.contains(_WeatherLayer.lightning))
+          _AirspaceLightningLayer(
+            center: center,
+            radiusNm: scene.radiusNm,
+            maxAltitudeFt: scaleAlt,
+            pitch: _pitch,
+            yaw: _yaw,
+            zoom: _zoom,
+            panX: _panX,
+            panY: _panY,
+            terrain: _terrainOn ? _terrain : null,
+          ),
         _OwnshipPulse(
           center: center,
           ownship: widget.followAircraft ? Storage().gpsChange : widget.ownship,
-          maxAltitudeFt: scene.maxAltitudeFt,
+          maxAltitudeFt: scaleAlt,
           radiusNm: scene.radiusNm,
           pitch: _pitch,
           yaw: _yaw,
@@ -691,9 +979,62 @@ class _Airspace3DViewState extends State<Airspace3DView> {
           panX: _panX,
           panY: _panY,
         ),
+        if (widget.weather &&
+            (_on.contains(_WeatherLayer.lightning) ||
+                _on.contains(_WeatherLayer.icing) ||
+                _on.contains(_WeatherLayer.turbulence)))
+          Positioned(
+            right: 8,
+            top: 6,
+            child: _WeatherKeys(
+              lightning: _on.contains(_WeatherLayer.lightning),
+              icing: _on.contains(_WeatherLayer.icing),
+              turbulence: _on.contains(_WeatherLayer.turbulence),
+              iceMin: _iceMin,
+              turbMin: _turbMin,
+            ),
+          ),
+        if (widget.weather && _showWind)
+          const Positioned(right: 8, bottom: 6, child: _WindLegend()),
+        if (widget.weather) _weatherMenu(scheme),
       ],
     );
   }
+
+  Widget _hazardLayer(Hazard hazard, int minValue, LatLng center,
+      AirspaceScene scene, double scaleAlt) {
+    return _AirspaceHazardLayer(
+      key: ValueKey(hazard),
+      hazard: hazard,
+      center: center,
+      radiusNm: scene.radiusNm,
+      maxAltitudeFt: scaleAlt,
+      minValue: minValue,
+      pitch: _pitch,
+      yaw: _yaw,
+      zoom: _zoom,
+      panX: _panX,
+      panY: _panY,
+      terrain: _terrainOn ? _terrain : null,
+    );
+  }
+
+  /// Terrain is part of the weather picture, and a chip in the airspace one.
+  bool get _terrainOn => widget.weather || _showTerrain;
+
+  /// The weather box is at least this tall, so winds aloft have room.
+  static const double _weatherTopFt = 12000;
+
+  /// Extra height the box needs beyond the airspace: the weather floor and the storm tops.
+  double get _extraTopFt => widget.weather
+      ? math.max(_weatherTopFt, math.max(_radarTopFt, _hazardTopFt))
+      : 0;
+
+  double _scaleAltitudeFt(AirspaceScene scene) => airspaceScaleAltitude(
+        scene.maxAltitudeFt,
+        _terrainOn ? _terrain?.elevFt ?? const <double?>[] : const <double?>[],
+        extraFt: _extraTopFt,
+      );
 
   Widget _filters(ColorScheme scheme) {
     Widget chip(String label, bool on, Color color, void Function(bool) set) {
@@ -725,13 +1066,258 @@ class _Airspace3DViewState extends State<Airspace3DView> {
           chip('B', _showB, _classColor('B'), (value) => _showB = value),
           chip('C', _showC, _classColor('C'), (value) => _showC = value),
           chip('D', _showD, _classColor('D'), (value) => _showD = value),
-          chip('SUA', _showSua, _classColor('MOA'), (value) => _showSua = value),
-          chip('TFR', _showTfr, Constants.tfrColor, (value) => _showTfr = value),
-          chip('Game', _showGame, GameTfr.borderColor, (value) => _showGame = value),
-          chip('Plan', _showPlan, Constants.planCurrentColor, (value) => _showPlan = value),
-          chip('Obstacles', _showObstacles, const Color(0xFFE53935), (value) => _showObstacles = value),
-          chip('Terrain', _showTerrain, const Color(0xFF5D4037), (value) => _showTerrain = value),
+          chip(
+              'SUA', _showSua, _classColor('MOA'), (value) => _showSua = value),
+          chip(
+              'TFR', _showTfr, Constants.tfrColor, (value) => _showTfr = value),
+          chip('Game', _showGame, GameTfr.borderColor,
+              (value) => _showGame = value),
+          chip('Plan', _showPlan, Constants.planCurrentColor,
+              (value) => _showPlan = value),
+          chip('Obstacles', _showObstacles, const Color(0xFFE53935),
+              (value) => _showObstacles = value),
+          chip('Terrain', _showTerrain, const Color(0xFF5D4037),
+              (value) => _showTerrain = value),
         ],
+      ),
+    );
+  }
+
+  /// Winds aloft are on at the start, so this one only hides and shows them.
+  Widget _windButton(ColorScheme scheme) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 3),
+      child: FilledButton.tonalIcon(
+        style: FilledButton.styleFrom(
+          visualDensity: VisualDensity.compact,
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          minimumSize: const Size(0, 30),
+          textStyle: const TextStyle(fontSize: 12),
+          backgroundColor: _showWind ? const Color(0xFF2E7D32) : null,
+          foregroundColor: _showWind ? Colors.white : null,
+        ),
+        icon:
+            Icon(_showWind ? Icons.layers_clear_outlined : Icons.air, size: 16),
+        label: Text(_showWind ? 'Hide Wind' : 'Show Wind'),
+        onPressed: () => setState(() => _showWind = !_showWind),
+      ),
+    );
+  }
+
+  /// A layer's button: build it, show how far the build is, hide it, or rebuild it.
+  Widget _layerButton(
+      _WeatherLayer layer, String name, IconData icon, ColorScheme scheme) {
+    final cache = _snapshotOf(layer);
+    final on = _on.contains(layer);
+    final String label;
+    final IconData shown;
+    if (!on) {
+      label = _expired.contains(layer) ? 'Rebuild $name' : 'Build $name';
+      shown = icon;
+    } else if (cache.progress != null) {
+      label = cache.progress!;
+      shown = Icons.hourglass_top;
+    } else {
+      label = 'Hide $name';
+      shown = Icons.layers_clear_outlined;
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 3),
+      child: FilledButton.tonalIcon(
+        style: FilledButton.styleFrom(
+          visualDensity: VisualDensity.compact,
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          minimumSize: const Size(0, 30),
+          textStyle: const TextStyle(fontSize: 12),
+          backgroundColor: on ? const Color(0xFF2E7D32) : null,
+          foregroundColor: on ? Colors.white : null,
+        ),
+        icon: Icon(shown, size: 16),
+        label: Text(label),
+        onPressed: () => setState(() {
+          if (!_on.remove(layer)) {
+            _on.add(layer);
+          }
+          _expired.remove(layer);
+          _graceChecks = 2;
+        }),
+      ),
+    );
+  }
+
+  /// A rounded menu button that picks the weakest value shown.
+  Widget _thresholdMenu<T>({
+    required ColorScheme scheme,
+    required String tooltip,
+    required String text,
+    required T current,
+    required List<(T, String)> items,
+    required void Function(T) onSelected,
+  }) {
+    // Indented: it belongs to the button above it.
+    return Padding(
+      padding: const EdgeInsets.only(left: 12, bottom: 3),
+      child: PopupMenuButton<T>(
+        tooltip: tooltip,
+        initialValue: current,
+        onSelected: (value) => setState(() => onSelected(value)),
+        itemBuilder: (context) => [
+          for (final item in items)
+            CheckedPopupMenuItem<T>(
+              value: item.$1,
+              checked: current == item.$1,
+              child: Text(item.$2),
+            ),
+        ],
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            border: Border.all(color: scheme.outline),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.max,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Flexible(
+                child: Text(text,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w600)),
+              ),
+              const Icon(Icons.arrow_drop_down, size: 18),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Red note beside the buttons for a layer that is off but has something to say.
+  Widget? _layerNote(
+      _WeatherLayer layer, String name, String stale, ColorScheme scheme) {
+    final cache = _snapshotOf(layer);
+    if (_on.contains(layer) ||
+        !(_expired.contains(layer) || cache.message != null)) {
+      return null;
+    }
+    return Text(
+      _expired.contains(layer) && cache.message == null
+          ? stale
+          : cache.message ?? '',
+      style: TextStyle(fontSize: 11, color: scheme.error),
+    );
+  }
+
+  /// The 3D Weather buttons, a column down the left side: one row per layer, with
+  /// the setting that belongs to a layer indented under its button.
+  Widget _weatherMenu(ColorScheme scheme) {
+    return Positioned.fill(
+      child: LayoutBuilder(
+        builder: (context, box) {
+          // The radar key sits at the top left when radar is on: stay below it.
+          final reserved = _showRadar ? 150.0 : 12.0;
+          return Align(
+            alignment: Alignment.bottomLeft,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 8, bottom: 6),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                    maxHeight: math.max(80, box.maxHeight - reserved),
+                    maxWidth: math.min(148, box.maxWidth * 0.4)),
+                child: _weatherBar(scheme),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _weatherBar(ColorScheme scheme) {
+    const dbzLevels = <(double, String)>[
+      (10, 'haze'),
+      (20, 'light rain'),
+      (30, 'moderate rain'),
+      (40, 'heavy rain'),
+      (50, 'intense, hail'),
+    ];
+    final notes = [
+      _layerNote(_WeatherLayer.radar, 'NEXRAD',
+          'NEXRAD is 10 min old. Rebuild for current radar.', scheme),
+      _layerNote(_WeatherLayer.lightning, 'Lightning',
+          'Lightning is 10 min old. Rebuild for current flashes.', scheme),
+      _layerNote(_WeatherLayer.icing, 'Icing',
+          'Icing is 60 min old. Rebuild for the current forecast.', scheme),
+      _layerNote(
+          _WeatherLayer.turbulence,
+          'Turbulence',
+          'Turbulence is 60 min old. Rebuild for the current forecast.',
+          scheme),
+    ].whereType<Widget>().toList();
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: scheme.surface.withAlpha(110),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: SingleChildScrollView(
+        child: IntrinsicWidth(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _windButton(scheme),
+              _layerButton(
+                  _WeatherLayer.lightning, 'Lightning', Icons.bolt, scheme),
+              _layerButton(_WeatherLayer.radar, 'NEXRAD', Icons.radar, scheme),
+              _thresholdMenu<double>(
+                scheme: scheme,
+                tooltip: 'dBZ setting',
+                text: 'dBZ ${_radarMinDbz.round()}+',
+                current: _radarMinDbz,
+                items: [
+                  for (final level in dbzLevels)
+                    (level.$1, '${level.$1.round()}+ dBZ  ${level.$2}'),
+                ],
+                onSelected: (value) => _radarMinDbz = value,
+              ),
+              _layerButton(_WeatherLayer.icing, 'Icing', Icons.ac_unit, scheme),
+              _thresholdMenu<int>(
+                scheme: scheme,
+                tooltip: 'Icing setting',
+                text:
+                    'Ice ${_iceLevels.firstWhere((l) => l.$1 == _iceMin).$2}+',
+                current: _iceMin,
+                items: [
+                  for (final level in _iceLevels) (level.$1, '${level.$2}+')
+                ],
+                onSelected: (value) => _iceMin = value,
+              ),
+              _layerButton(
+                  _WeatherLayer.turbulence, 'Turbulence', Icons.waves, scheme),
+              _thresholdMenu<int>(
+                scheme: scheme,
+                tooltip: 'Turbulence setting',
+                text:
+                    'Turb ${_turbLevels.firstWhere((l) => l.$1 == _turbMin).$2}+',
+                current: _turbMin,
+                items: [
+                  for (final level in _turbLevels)
+                    (level.$1, '${level.$2}+  EDR ${level.$3}'),
+                ],
+                onSelected: (value) => _turbMin = value,
+              ),
+              // Notes get their own lines under the buttons.
+              for (final note in notes)
+                Padding(
+                    padding: const EdgeInsets.only(top: 2, left: 2, right: 2),
+                    child: note),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -743,7 +1329,8 @@ class _Airspace3DViewState extends State<Airspace3DView> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.view_in_ar_outlined, size: 48, color: Theme.of(context).colorScheme.outline),
+            Icon(Icons.view_in_ar_outlined,
+                size: 48, color: Theme.of(context).colorScheme.outline),
             const SizedBox(height: 8),
             Text(
               text,
@@ -755,7 +1342,6 @@ class _Airspace3DViewState extends State<Airspace3DView> {
       ),
     );
   }
-
 }
 
 Color _classColor(String cls) {
@@ -779,11 +1365,63 @@ Color _classColor(String cls) {
   }
 }
 
+/// Same pavement colors as the long-press AD diagram.
+Color _diagramSurface(String surface) {
+  final surf = surface.toUpperCase();
+  if (surf.length >= 5 && surf.substring(0, 5) == 'WATER') {
+    return Colors.blue;
+  }
+  if (surf.length >= 4) {
+    switch (surf.substring(0, 4)) {
+      case 'ASPH':
+        return Colors.grey.shade700;
+      case 'CONC':
+        return Colors.grey;
+      case 'TURF':
+        return Colors.green;
+      case 'DIRT':
+        return Colors.brown;
+      case 'SAND':
+        return Colors.amber.shade200;
+    }
+  }
+  return Colors.grey;
+}
+
+/// The data layers of the 3D Weather screen.
+enum _WeatherLayer { radar, lightning, icing, turbulence }
+
+SnapshotCache _snapshotOf(_WeatherLayer layer) {
+  switch (layer) {
+    case _WeatherLayer.radar:
+      return NexradVolumeCache.instance;
+    case _WeatherLayer.lightning:
+      return LightningCache.instance;
+    case _WeatherLayer.icing:
+      return DafsCache.icing;
+    case _WeatherLayer.turbulence:
+      return DafsCache.turbulence;
+  }
+}
+
 class _Ownship {
   final NmPoint offset;
   final double altFt;
 
   const _Ownship(this.offset, this.altFt);
+}
+
+/// Shelf tops, or the terrain when the ground is higher, so a slab on the ground stays in frame.
+@visibleForTesting
+double airspaceScaleAltitude(double shelfMaxFt, Iterable<double?> terrainFt,
+    {double extraFt = 0}) {
+  var maxFt = math.max(shelfMaxFt, extraFt);
+  for (final height in terrainFt) {
+    if (height != null && height.isFinite && height > maxFt) {
+      maxFt = height;
+    }
+  }
+  return maxFt;
 }
 
 /// Same camera for the airspace and the pulsing ownship dot.
@@ -864,6 +1502,11 @@ class _AirspacePainter extends CustomPainter {
   final bool showObstacles;
   final bool showSua;
   final bool showTerrainMesh;
+  final bool showGlide;
+
+  /// Red where the ground is within 500 ft of the aircraft's altitude or above it.
+  final bool terrainByOwnship;
+  final double extraTopFt;
 
   _AirspacePainter({
     required this.scene,
@@ -890,7 +1533,12 @@ class _AirspacePainter extends CustomPainter {
     required this.showObstacles,
     required this.showSua,
     required this.showTerrainMesh,
-  }) : super(repaint: Listenable.merge([ownship, Storage().route.change, Storage().area.change]));
+    this.showGlide = true,
+    this.terrainByOwnship = true,
+    this.extraTopFt = 0,
+  }) : super(
+            repaint: Listenable.merge(
+                [ownship, Storage().route.change, Storage().area.change]));
 
   /// Current ownship in this view, or null when it has no fix or is outside 25 NM.
   _Ownship? get _liveOwnship {
@@ -914,7 +1562,13 @@ class _AirspacePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     canvas.drawRect(Offset.zero & size, Paint()..color = background);
     final radius = scene.radiusNm;
-    final maxAlt = scene.maxAltitudeFt;
+    final maxAlt = airspaceScaleAltitude(
+      scene.maxAltitudeFt,
+      showTerrainMesh
+          ? terrain?.elevFt ?? const <double?>[]
+          : const <double?>[],
+      extraFt: extraTopFt,
+    );
 
     _Proj project(double east, double north, double altFt) {
       return _projectView(
@@ -933,7 +1587,7 @@ class _AirspacePainter extends CustomPainter {
     }
 
     _drawGround(canvas, project, radius);
-    _drawAxis(canvas, project, radius, maxAlt);
+    _drawAxis(canvas, size, project, radius, maxAlt);
 
     final faces = <_Face>[];
     for (final shelf in scene.shelves) {
@@ -942,11 +1596,15 @@ class _AirspacePainter extends CustomPainter {
       }
     }
     _addEnabledAreas(faces, project, maxAlt);
-    _addGlideCone(faces, project, maxAlt);
+    if (showGlide) {
+      _addGlideCone(faces, project, maxAlt);
+    }
+    _addTerrain(faces, project);
     faces.sort((a, b) => b.depth.compareTo(a.depth));
     for (final face in faces) {
       face.draw(canvas);
     }
+    _drawGrid(canvas, project, radius);
 
     if (showPressPoint) {
       _drawHere(canvas, project, maxAlt);
@@ -955,19 +1613,25 @@ class _AirspacePainter extends CustomPainter {
       _drawObstacles(canvas, project);
     }
     _drawAirports(canvas, project);
+    _drawDiagrams(canvas, project);
     for (final shelf in scene.shelves) {
-      if (_classOn(shelf.airspaceClass) && shelf.showLabel && shelf.rings.isNotEmpty) {
+      if (_classOn(shelf.airspaceClass) &&
+          shelf.showLabel &&
+          shelf.rings.isNotEmpty) {
         _drawLabel(canvas, project, shelf);
       }
     }
     if (showPlan) {
       _drawPlan(canvas, project, maxAlt);
     }
-    _drawGlide(canvas, project, maxAlt);
+    if (showGlide) {
+      _drawGlide(canvas, project, maxAlt);
+    }
     _drawTraffic(canvas, project, maxAlt);
   }
 
-  void _drawGround(Canvas canvas, _Proj Function(double, double, double) project, double radius) {
+  void _drawGround(Canvas canvas,
+      _Proj Function(double, double, double) project, double radius) {
     final corners = [
       project(-radius, -radius, 0),
       project(radius, -radius, 0),
@@ -982,39 +1646,85 @@ class _AirspacePainter extends CustomPainter {
     if (terrain == null || !showTerrainMesh) {
       canvas.drawPath(ground, Paint()..color = gridColor.withAlpha(28));
     }
-    if (showTerrainMesh) {
-      _drawTerrain(canvas, project);
+  }
+
+  /// 5 NM reference drawn on the surface, after the mesh, so the lines follow the hills.
+  void _drawGrid(Canvas canvas, _Proj Function(double, double, double) project,
+      double radius) {
+    final mesh = showTerrainMesh ? terrain : null;
+    double heightAt(double east, double north) {
+      if (mesh == null) {
+        return 0;
+      }
+      return sampleTerrainFt(
+              mesh.elevFt, mesh.cols, mesh.rows, east, north, radius) ??
+          0;
     }
 
     final grid = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1
       ..color = gridColor;
-    for (var g = -radius; g <= radius + 0.01; g += 5) {
-      final a = project(-radius, g, 0);
-      final b = project(radius, g, 0);
-      final c = project(g, -radius, 0);
-      final d = project(g, radius, 0);
-      canvas.drawLine(a.o, b.o, grid);
-      canvas.drawLine(c.o, d.o, grid);
+    final steps = mesh == null ? 1 : math.max(1, mesh.cols - 1);
+    void stroke(double e0, double n0, double e1, double n1) {
+      Offset? previous;
+      for (var i = 0; i <= steps; i++) {
+        final t = i / steps;
+        final east = e0 + (e1 - e0) * t;
+        final north = n0 + (n1 - n0) * t;
+        final at = project(east, north, heightAt(east, north));
+        if (previous != null) {
+          canvas.drawLine(previous, at.o, grid);
+        }
+        previous = at.o;
+      }
     }
 
-    final north = project(0, radius, 0);
-    _text(canvas, 'N', north.o, axisColor, 12, FontWeight.w700);
-    final scaleA = project(-radius, radius, 0);
-    final scaleB = project(-radius + 5, radius, 0);
-    canvas.drawLine(scaleA.o, scaleB.o, Paint()..color = axisColor..strokeWidth = 2);
-    _text(canvas, '5 NM', Offset((scaleA.x + scaleB.x) / 2, (scaleA.y + scaleB.y) / 2 - 12), axisColor, 10, FontWeight.w500);
+    for (var g = -radius; g <= radius + 0.01; g += 5) {
+      stroke(-radius, g, radius, g);
+      stroke(g, -radius, g, radius);
+    }
+
+    final scaleA = project(-radius, radius, heightAt(-radius, radius));
+    final scaleB = project(-radius + 5, radius, heightAt(-radius + 5, radius));
+    canvas.drawLine(
+        scaleA.o,
+        scaleB.o,
+        Paint()
+          ..color = axisColor
+          ..strokeWidth = 2);
+    _text(
+        canvas,
+        '5 NM',
+        Offset((scaleA.x + scaleB.x) / 2, (scaleA.y + scaleB.y) / 2 - 12),
+        axisColor,
+        10,
+        FontWeight.w500);
   }
 
-  void _drawTerrain(Canvas canvas, _Proj Function(double, double, double) project) {
+  /// Opaque ground cells, sorted with the shelves and the glide cone.
+  /// A cell with one missing sample is still drawn from the other three corners.
+  void _addTerrain(
+      List<_Face> faces, _Proj Function(double, double, double) project) {
     final mesh = terrain;
-    if (mesh == null || mesh.cols < 2 || mesh.rows < 2) {
+    if (!showTerrainMesh || mesh == null || mesh.cols < 2 || mesh.rows < 2) {
       return;
     }
-    final ownAlt = _liveOwnship?.altFt;
+    var minFt = double.infinity;
+    var maxFt = -double.infinity;
+    for (final height in mesh.elevFt) {
+      if (height == null) {
+        continue;
+      }
+      minFt = math.min(minFt, height);
+      maxFt = math.max(maxFt, height);
+    }
+    if (minFt == double.infinity) {
+      return;
+    }
+    // 3D Weather shows the ground as it is, not against the aircraft's altitude.
+    final ownAlt = terrainByOwnship ? _liveOwnship?.altFt : null;
     final radius = scene.radiusNm;
-    final quads = <({ui.Path path, double depth, Color color})>[];
     for (var row = 0; row < mesh.rows - 1; row++) {
       for (var col = 0; col < mesh.cols - 1; col++) {
         final i00 = row * mesh.cols + col;
@@ -1024,22 +1734,33 @@ class _AirspacePainter extends CustomPainter {
           mesh.elevFt[i00 + mesh.cols + 1],
           mesh.elevFt[i00 + mesh.cols],
         ];
-        if (heights.any((height) => height == null)) {
+        final corners = <List<num>>[
+          [col, row, heights[0] ?? -1],
+          [col + 1, row, heights[1] ?? -1],
+          [col + 1, row + 1, heights[2] ?? -1],
+          [col, row + 1, heights[3] ?? -1],
+        ];
+        final known = <int>[
+          for (var i = 0; i < corners.length; i++)
+            if (heights[i] != null) i,
+        ];
+        if (known.length < 3) {
           continue;
         }
-        final corners = [
-          [col, row, heights[0]!],
-          [col + 1, row, heights[1]!],
-          [col + 1, row + 1, heights[2]!],
-          [col, row + 1, heights[3]!],
-        ];
+        final used = known.length == 4 ? const [0, 1, 2, 3] : known;
         final path = ui.Path();
         var depth = 0.0;
-        for (var i = 0; i < corners.length; i++) {
-          final east = -radius + 2 * radius * corners[i][0] / (mesh.cols - 1);
-          final north = -radius + 2 * radius * corners[i][1] / (mesh.rows - 1);
-          final at = project(east, north, corners[i][2].toDouble());
+        var top = -double.infinity;
+        for (var i = 0; i < used.length; i++) {
+          final corner = corners[used[i]];
+          final east = -radius + 2 * radius * corner[0] / (mesh.cols - 1);
+          final north = -radius + 2 * radius * corner[1] / (mesh.rows - 1);
+          final elevFt = corner[2].toDouble();
+          final at = project(east, north, elevFt);
           depth += at.depth;
+          if (elevFt > top) {
+            top = elevFt;
+          }
           if (i == 0) {
             path.moveTo(at.x, at.y);
           } else {
@@ -1047,39 +1768,53 @@ class _AirspacePainter extends CustomPainter {
           }
         }
         path.close();
-        final top = heights.whereType<double>().reduce(math.max);
-        quads.add((path: path, depth: depth / 4, color: _terrainColor(top, ownAlt)));
+        final color = _terrainColor(top, ownAlt, minFt, maxFt);
+        final fill = Paint()..color = color;
+        final edge = Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 0.6
+          ..color = Color.lerp(color, Colors.black, 0.28)!;
+        faces.add(_Face(depth / used.length, (canvas) {
+          canvas.drawPath(path, fill);
+          canvas.drawPath(path, edge);
+        }));
       }
-    }
-    quads.sort((a, b) => b.depth.compareTo(a.depth));
-    for (final quad in quads) {
-      canvas.drawPath(quad.path, Paint()..color = quad.color);
     }
   }
 
-  Color _terrainColor(double elevFt, double? ownAltFt) {
+  Color _terrainColor(
+      double elevFt, double? ownAltFt, double minFt, double maxFt) {
     if (ownAltFt != null && elevFt >= ownAltFt - 500) {
       return const Color(0xCCFF0000);
     }
-    final shade = (elevFt / 8000).clamp(0.0, 1.0);
-    return Color.lerp(const Color(0xFF5D4037), const Color(0xFFD7CCC8), shade)!;
+    final span = math.max(400.0, maxFt - minFt);
+    final shade = ((elevFt - minFt) / span).clamp(0.0, 1.0);
+    return Color.lerp(const Color(0xFF3E2723), const Color(0xFFEFEBE9), shade)!;
   }
 
-  void _drawTraffic(Canvas canvas, _Proj Function(double, double, double) project, double maxAlt) {
+  void _drawTraffic(Canvas canvas,
+      _Proj Function(double, double, double) project, double maxAlt) {
     final fill = Paint();
     final outline = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2
       ..color = Colors.black;
     for (final dot in traffic) {
-      final at = project(dot.eastNm, dot.northNm, dot.altitudeFt.clamp(0, maxAlt));
-      fill.color = dot.threat ? Constants.trafficColorAlert : Constants.trafficColor;
+      final at =
+          project(dot.eastNm, dot.northNm, dot.altitudeFt.clamp(0, maxAlt));
+      fill.color =
+          dot.threat ? Constants.trafficColorAlert : Constants.trafficColor;
       canvas.drawCircle(at.o, 4.5, fill);
       canvas.drawCircle(at.o, 4.5, outline);
     }
   }
 
-  void _drawAxis(Canvas canvas, _Proj Function(double, double, double) project, double radius, double maxAlt) {
+  void _drawAxis(
+      Canvas canvas,
+      Size size,
+      _Proj Function(double, double, double) project,
+      double radius,
+      double maxAlt) {
     final paint = Paint()
       ..color = axisColor
       ..strokeWidth = 1.2;
@@ -1094,9 +1829,55 @@ class _AirspacePainter extends CustomPainter {
       final thousands = ft / 1000;
       final label = ft <= 0
           ? 'SF'
-          : (thousands == thousands.roundToDouble() ? '${thousands.round()}k' : '${thousands.toStringAsFixed(1)}k');
-      _text(canvas, label, p.o + const Offset(-28, -6), axisColor, 10, FontWeight.w500);
+          : (thousands == thousands.roundToDouble()
+              ? '${thousands.round()}k'
+              : '${thousands.toStringAsFixed(1)}k');
+      _text(canvas, label, p.o + const Offset(-28, -6), axisColor, 10,
+          FontWeight.w500);
     }
+    _drawNorthArrow(canvas, size, project, radius, maxAlt, top.o);
+  }
+
+  /// A red arrow above the top of the altitude scale that points to north as the
+  /// view is turned, with an N past its head.
+  void _drawNorthArrow(
+      Canvas canvas,
+      Size size,
+      _Proj Function(double, double, double) project,
+      double radius,
+      double maxAlt,
+      Offset scaleTop) {
+    final from = project(-radius, -radius, maxAlt).o;
+    final ahead = project(-radius, -radius + 1, maxAlt).o;
+    var direction = ahead - from;
+    // North points straight at or away from the camera: the arrow has no length
+    // on the screen, so point it up and let the N say the rest.
+    final flat = direction.distance < 0.01;
+    direction = flat ? const Offset(0, -1) : direction / direction.distance;
+    const red = Color(0xFFE53935);
+    const length = 30.0;
+    // Above the scale, but kept on the screen when the scale is near the top.
+    final above = scaleTop + const Offset(0, -30);
+    final middle = Offset(above.dx.clamp(30.0, math.max(30.0, size.width - 30)),
+        above.dy.clamp(30.0, math.max(30.0, size.height - 30)));
+    final tail = middle - direction * (length / 2);
+    final head = tail + direction * length;
+    final side = Offset(-direction.dy, direction.dx);
+    final paint = Paint()
+      ..color = red
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(tail, head - direction * 5, paint);
+    canvas.drawPath(
+        ui.Path()
+          ..moveTo(head.dx, head.dy)
+          ..lineTo((head - direction * 11 + side * 6).dx,
+              (head - direction * 11 + side * 6).dy)
+          ..lineTo((head - direction * 11 - side * 6).dx,
+              (head - direction * 11 - side * 6).dy)
+          ..close(),
+        Paint()..color = red);
+    _text(canvas, 'N', head + direction * 11, red, 14, FontWeight.w800);
   }
 
   bool _classOn(String cls) {
@@ -1112,51 +1893,359 @@ class _AirspacePainter extends CustomPainter {
     }
   }
 
-  void _addEnabledAreas(List<_Face> faces, _Proj Function(double, double, double) project, double maxAlt) {
-    if (showTfr && _layerOn('TFR')) {
+  void _addEnabledAreas(List<_Face> faces,
+      _Proj Function(double, double, double) project, double maxAlt) {
+    if (showTfr) {
       try {
         for (final weather in Storage().tfr.getAll()) {
           final tfr = weather as Tfr;
           if (!tfr.isRelevant() || tfr.coordinates.length < 3) {
             continue;
           }
-          final lower = parseTfrAltitude(tfr.lowerAltitude);
-          final upper = parseTfrAltitude(tfr.upperAltitude);
-          final floor = (lower?.$1 ?? 0).clamp(0.0, maxAlt).toDouble();
-          final ceiling = (upper == null || upper.$2 ? maxAlt : upper.$1).clamp(floor, maxAlt).toDouble();
+          final lower = parseTfrLevel(tfr.lowerAltitude);
+          final upper = parseTfrLevel(tfr.upperAltitude);
+          final floor = lower?.feet ?? 0;
+          final ceiling =
+              upper == null || upper.unlimited ? maxAlt : upper.feet;
+          final ring = clipPolygon(
+              _planOffsets(center, tfr.coordinates), scene.radiusNm);
+          final color =
+              tfr.isInEffect() ? Constants.tfrColor : Constants.tfrColorFuture;
+          if (tfrAboveScale(lower, maxAlt)) {
+            _addAboveScaleArrows(faces, project, ring, maxAlt, color);
+            continue;
+          }
           _addPrism(
             faces,
             project,
-            clipPolygon(_planOffsets(center, tfr.coordinates), scene.radiusNm),
+            ring,
             floor,
             ceiling,
-            tfr.isInEffect() ? Constants.tfrColor : Constants.tfrColorFuture,
+            color,
+            floorAgl: lower?.agl ?? false,
+            ceilingAgl: upper != null && !upper.unlimited && upper.agl,
           );
         }
       } catch (_) {}
     }
-    if (!showGame || !_layerOn(GameTfr.layerName)) {
+    if (!showGame) {
       return;
     }
     const radiusNm = 3.0;
     for (final venue in GameTfr.locations) {
-      final at = ownshipOffsetNm(center, LatLng(venue.latitude, venue.longitude), radiusNm: null);
-      if (at == null || at.e.abs() > scene.radiusNm + radiusNm || at.n.abs() > scene.radiusNm + radiusNm) {
+      final at = ownshipOffsetNm(
+          center, LatLng(venue.latitude, venue.longitude),
+          radiusNm: null);
+      if (at == null ||
+          at.e.abs() > scene.radiusNm + radiusNm ||
+          at.n.abs() > scene.radiusNm + radiusNm) {
         continue;
       }
       final mesh = terrain;
       final ground = mesh == null
           ? 0.0
-          : (sampleTerrainFt(mesh.elevFt, mesh.cols, mesh.rows, at.e, at.n, scene.radiusNm) ?? 0);
+          : (sampleTerrainFt(mesh.elevFt, mesh.cols, mesh.rows, at.e, at.n,
+                  scene.radiusNm) ??
+              0);
       final floor = ground.clamp(0.0, maxAlt).toDouble();
       final ceiling = (floor + 3000).clamp(floor, maxAlt).toDouble();
       final ring = <NmPoint>[];
       for (var step = 0; step < 24; step++) {
         final angle = step * math.pi * 2 / 24;
-        ring.add(NmPoint(at.e + radiusNm * math.sin(angle), at.n + radiusNm * math.cos(angle)));
+        ring.add(NmPoint(at.e + radiusNm * math.sin(angle),
+            at.n + radiusNm * math.cos(angle)));
       }
-      _addPrism(faces, project, clipPolygon(ring, scene.radiusNm), floor, ceiling, GameTfr.borderColor);
+      _addPrism(faces, project, clipPolygon(ring, scene.radiusNm), floor,
+          ceiling, GameTfr.borderColor);
     }
+  }
+
+  /// Terrain under [east]/[north], or 0 when the mesh has no sample.
+  double _groundFt(double east, double north) {
+    final mesh = showTerrainMesh ? terrain : null;
+    if (mesh == null) {
+      return 0;
+    }
+    return sampleTerrainFt(
+            mesh.elevFt, mesh.cols, mesh.rows, east, north, scene.radiusNm) ??
+        0;
+  }
+
+  /// MSL stays a fixed altitude, lifted to the ground when the hill is higher.
+  /// AGL stays that many feet above the ground, including above the shelf scale.
+  double _tfrLevel(double east, double north, double feet, bool agl) {
+    final ground = _groundFt(east, north);
+    if (agl) {
+      return tfrLevelFeet(feet, agl: true, groundFt: ground);
+    }
+    return math.max(feet, ground).clamp(0.0, scene.maxAltitudeFt).toDouble();
+  }
+
+  /// Published MSL altitude, or the terrain when the ground is higher.
+  double _onSurface(double east, double north, double mslFt) {
+    final mesh = showTerrainMesh ? terrain : null;
+    if (mesh == null) {
+      return mslFt;
+    }
+    return airspaceAboveGround(
+      mslFt,
+      sampleTerrainFt(
+          mesh.elevFt, mesh.cols, mesh.rows, east, north, scene.radiusNm),
+    );
+  }
+
+  /// Floor of a volume. With terrain, each piece sits on the ground and stops at the ceiling.
+  void _addDrapedFloor(
+    List<_Face> faces,
+    _Proj Function(double, double, double) project,
+    List<List<NmPoint>> rings,
+    double floorFt,
+    double ceilingFt,
+    Color color,
+    int alpha, {
+    double Function(double east, double north)? floorAt,
+    double Function(double east, double north)? ceilingAt,
+  }) {
+    final mesh = showTerrainMesh ? terrain : null;
+    if (mesh == null) {
+      _addFlatCap(faces, project, rings, floorFt, color, alpha, stroke: true);
+      return;
+    }
+    final step = scene.radiusNm / 16;
+    var minE = double.infinity;
+    var maxE = -double.infinity;
+    var minN = double.infinity;
+    var maxN = -double.infinity;
+    for (final ring in rings) {
+      for (final point in ring) {
+        minE = math.min(minE, point.e);
+        maxE = math.max(maxE, point.e);
+        minN = math.min(minN, point.n);
+        maxN = math.max(maxN, point.n);
+      }
+    }
+    if (minE == double.infinity) {
+      return;
+    }
+    final fill = Paint()
+      ..color = color.withAlpha(alpha)
+      ..style = PaintingStyle.fill;
+    for (var north = minN; north < maxN; north += step) {
+      for (var east = minE; east < maxE; east += step) {
+        final mid = NmPoint(east + step / 2, north + step / 2);
+        if (!polygonContains(rings, mid.e, mid.n)) {
+          continue;
+        }
+        List<NmPoint>? clip;
+        var clipArea = double.infinity;
+        for (final ring in rings) {
+          if (!polygonContains([ring], mid.e, mid.n)) {
+            continue;
+          }
+          final area = _ringArea(ring).abs();
+          if (area < clipArea) {
+            clipArea = area;
+            clip = ring;
+          }
+        }
+        if (clip == null) {
+          continue;
+        }
+        final piece = clipRingToRing([
+          NmPoint(east, north),
+          NmPoint(east + step, north),
+          NmPoint(east + step, north + step),
+          NmPoint(east, north + step),
+        ], clip);
+        if (piece.length < 3) {
+          continue;
+        }
+        final path = ui.Path();
+        var depth = 0.0;
+        var buried = true;
+        for (var i = 0; i < piece.length; i++) {
+          final point = piece[i];
+          final cap = ceilingAt?.call(point.e, point.n) ?? ceilingFt;
+          final raw = floorAt?.call(point.e, point.n) ??
+              _onSurface(point.e, point.n, floorFt);
+          final height = math.min(raw, cap);
+          if (height < cap - 1) {
+            buried = false;
+          }
+          final at = project(point.e, point.n, height);
+          depth += at.depth;
+          if (i == 0) {
+            path.moveTo(at.x, at.y);
+          } else {
+            path.lineTo(at.x, at.y);
+          }
+        }
+        if (buried) {
+          continue;
+        }
+        path.close();
+        final drawn = path;
+        faces.add(_Face(depth / piece.length - 0.004, (canvas) {
+          canvas.drawPath(drawn, fill);
+        }));
+      }
+    }
+  }
+
+  void _addFlatCap(
+    List<_Face> faces,
+    _Proj Function(double, double, double) project,
+    List<List<NmPoint>> rings,
+    double altFt,
+    Color color,
+    int alpha, {
+    required bool stroke,
+  }) {
+    final path = ui.Path()..fillType = PathFillType.evenOdd;
+    var depth = 0.0;
+    var count = 0;
+    for (final ring in rings) {
+      if (ring.length < 3) {
+        continue;
+      }
+      for (var i = 0; i < ring.length; i++) {
+        final at = project(ring[i].e, ring[i].n, altFt);
+        depth += at.depth;
+        count++;
+        if (i == 0) {
+          path.moveTo(at.x, at.y);
+        } else {
+          path.lineTo(at.x, at.y);
+        }
+      }
+      path.close();
+    }
+    if (count == 0) {
+      return;
+    }
+    final fill = Paint()
+      ..color = color.withAlpha(alpha)
+      ..style = PaintingStyle.fill;
+    final edge = Paint()
+      ..color = color.withAlpha(230)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+    faces.add(_Face(depth / count, (canvas) {
+      canvas.drawPath(path, fill);
+      if (stroke) {
+        canvas.drawPath(path, edge);
+      }
+    }));
+  }
+
+  /// Walls from the ground (or the published floor, whichever is higher) up to [ceilingFt].
+  void _addLiftedWalls(
+    List<_Face> faces,
+    _Proj Function(double, double, double) project,
+    List<List<NmPoint>> rings,
+    List<bool> hidden,
+    double floorFt,
+    double ceilingFt,
+    Color color,
+    int alpha, {
+    double Function(double east, double north)? floorAt,
+    double Function(double east, double north)? ceilingAt,
+  }) {
+    final wall = Paint()..style = PaintingStyle.fill;
+    for (final ring in rings) {
+      if (ring.length < 2) {
+        continue;
+      }
+      for (var i = 0; i < ring.length; i++) {
+        if (i < hidden.length && hidden[i]) {
+          continue;
+        }
+        final a = ring[i];
+        final b = ring[(i + 1) % ring.length];
+        final de = b.e - a.e;
+        final dn = b.n - a.n;
+        final len = math.sqrt(de * de + dn * dn);
+        var shade = 0.72;
+        if (len > 1e-6) {
+          final nx = dn / len;
+          final nz = -de / len;
+          shade =
+              (0.55 + 0.45 * (nx * 0.65 + nz * 0.75).abs()).clamp(0.45, 1.0);
+        }
+        final side = Color.lerp(Colors.black, color, shade)!.withAlpha(alpha);
+        final steps = math.max(1, (len / 0.75).ceil());
+        for (var step = 0; step < steps; step++) {
+          final t0 = step / steps;
+          final t1 = (step + 1) / steps;
+          final e0 = a.e + de * t0;
+          final n0 = a.n + dn * t0;
+          final e1 = a.e + de * t1;
+          final n1 = a.n + dn * t1;
+          final cap0 = ceilingAt?.call(e0, n0) ?? ceilingFt;
+          final cap1 = ceilingAt?.call(e1, n1) ?? ceilingFt;
+          final h0 = math.min(
+              cap0, floorAt?.call(e0, n0) ?? _onSurface(e0, n0, floorFt));
+          final h1 = math.min(
+              cap1, floorAt?.call(e1, n1) ?? _onSurface(e1, n1, floorFt));
+          if (h0 >= cap0 - 1 && h1 >= cap1 - 1) {
+            continue;
+          }
+          final p1 = project(e0, n0, h0);
+          final p2 = project(e1, n1, h1);
+          final p3 = project(e1, n1, cap1);
+          final p4 = project(e0, n0, cap0);
+          final path = ui.Path()
+            ..moveTo(p1.x, p1.y)
+            ..lineTo(p2.x, p2.y)
+            ..lineTo(p3.x, p3.y)
+            ..lineTo(p4.x, p4.y)
+            ..close();
+          final depth = (p1.depth + p2.depth + p3.depth + p4.depth) / 4 - 0.004;
+          faces.add(_Face(depth, (canvas) {
+            wall.color = side;
+            canvas.drawPath(path, wall);
+          }));
+        }
+      }
+    }
+  }
+
+  /// Dashed footprint at the top of the picture, with arrows continuing up.
+  void _addAboveScaleArrows(
+    List<_Face> faces,
+    _Proj Function(double, double, double) project,
+    List<NmPoint> ring,
+    double scaleFt,
+    Color color,
+  ) {
+    if (ring.length < 3) {
+      return;
+    }
+    var depth = 0.0;
+    for (final point in ring) {
+      depth += project(point.e, point.n, scaleFt).depth;
+    }
+    final count = math.min(6, ring.length);
+    faces.add(_Face(depth / ring.length - 0.02, (canvas) {
+      final paint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.8
+        ..color = color.withAlpha(230);
+      for (var i = 0; i < ring.length; i++) {
+        final a = project(ring[i].e, ring[i].n, scaleFt).o;
+        final b = project(ring[(i + 1) % ring.length].e,
+                ring[(i + 1) % ring.length].n, scaleFt)
+            .o;
+        _dash(canvas, a, b, paint);
+      }
+      final rise = math.max(scaleFt * 0.12, 800);
+      for (var mark = 0; mark < count; mark++) {
+        final point = ring[(mark * ring.length / count).floor()];
+        final base = project(point.e, point.n, scaleFt).o;
+        final tip = project(point.e, point.n, scaleFt + rise).o;
+        _upArrow(canvas, base, tip, color.withAlpha(230));
+      }
+    }));
   }
 
   void _addPrism(
@@ -1165,11 +2254,18 @@ class _AirspacePainter extends CustomPainter {
     List<NmPoint> ring,
     double floorFt,
     double ceilingFt,
-    Color color,
-  ) {
-    if (ring.length < 3 || ceilingFt <= floorFt) {
+    Color color, {
+    bool floorAgl = false,
+    bool ceilingAgl = false,
+  }) {
+    if (ring.length < 3 || (!floorAgl && !ceilingAgl && ceilingFt <= floorFt)) {
       return;
     }
+    double floorHere(double east, double north) =>
+        _tfrLevel(east, north, floorFt, floorAgl);
+    double ceilingHere(double east, double north) => ceilingAgl
+        ? _tfrLevel(east, north, ceilingFt, true)
+        : math.min(ceilingFt, scene.maxAltitudeFt);
     void cap(double altFt, int alpha) {
       final path = ui.Path();
       var depth = 0.0;
@@ -1185,7 +2281,9 @@ class _AirspacePainter extends CustomPainter {
         }
       }
       path.close();
-      final fill = Paint()..color = color.withAlpha(alpha)..style = PaintingStyle.fill;
+      final fill = Paint()
+        ..color = color.withAlpha(alpha)
+        ..style = PaintingStyle.fill;
       final stroke = Paint()
         ..color = color.withAlpha(230)
         ..style = PaintingStyle.stroke
@@ -1196,31 +2294,48 @@ class _AirspacePainter extends CustomPainter {
       }));
     }
 
-    cap(floorFt, 70);
-    cap(ceilingFt, 130);
-    final wall = Paint()..style = PaintingStyle.fill;
-    for (var i = 0; i < ring.length; i++) {
-      final a = ring[i];
-      final b = ring[(i + 1) % ring.length];
-      final p1 = project(a.e, a.n, floorFt);
-      final p2 = project(b.e, b.n, floorFt);
-      final p3 = project(b.e, b.n, ceilingFt);
-      final p4 = project(a.e, a.n, ceilingFt);
-      final path = ui.Path()
-        ..moveTo(p1.x, p1.y)
-        ..lineTo(p2.x, p2.y)
-        ..lineTo(p3.x, p3.y)
-        ..lineTo(p4.x, p4.y)
-        ..close();
-      final depth = (p1.depth + p2.depth + p3.depth + p4.depth) / 4;
-      faces.add(_Face(depth, (canvas) {
-        wall.color = color.withAlpha(90);
-        canvas.drawPath(path, wall);
-      }));
+    if (ceilingAgl) {
+      _addDrapedFloor(
+        faces,
+        project,
+        [ring],
+        ceilingFt,
+        double.infinity,
+        color,
+        130,
+        floorAt: ceilingHere,
+        ceilingAt: (east, north) => double.infinity,
+      );
+    } else {
+      cap(math.min(ceilingFt, scene.maxAltitudeFt), 130);
     }
+    _addDrapedFloor(
+      faces,
+      project,
+      [ring],
+      floorFt,
+      ceilingFt,
+      color,
+      70,
+      floorAt: floorHere,
+      ceilingAt: ceilingHere,
+    );
+    _addLiftedWalls(
+      faces,
+      project,
+      [ring],
+      List.filled(ring.length, false),
+      floorFt,
+      ceilingFt,
+      color,
+      90,
+      floorAt: floorHere,
+      ceilingAt: ceilingHere,
+    );
   }
 
-  void _addShelf(List<_Face> faces, _Proj Function(double, double, double) project, AirspaceShelf shelf) {
+  void _addShelf(List<_Face> faces,
+      _Proj Function(double, double, double) project, AirspaceShelf shelf) {
     final color = _classColor(shelf.airspaceClass);
     final rings = shelf.rings;
     if (rings.isEmpty) {
@@ -1269,7 +2384,9 @@ class _AirspacePainter extends CustomPainter {
       if (count == 0) {
         return;
       }
-      final fill = Paint()..color = color.withAlpha(alpha)..style = PaintingStyle.fill;
+      final fill = Paint()
+        ..color = color.withAlpha(alpha)
+        ..style = PaintingStyle.fill;
       final stroke = Paint()
         ..color = color.withAlpha(230)
         ..style = PaintingStyle.stroke
@@ -1285,42 +2402,22 @@ class _AirspacePainter extends CustomPainter {
     } else {
       cap(ceilingFt, 150);
     }
-    cap(floorFt, 90);
-
-    final wall = Paint()..style = PaintingStyle.fill;
+    if (showTerrainMesh && terrain != null) {
+      _addDrapedFloor(
+        faces,
+        project,
+        [for (final ring in rings) ring.points],
+        floorFt,
+        ceilingFt,
+        color,
+        90,
+      );
+    } else {
+      cap(floorFt, 90);
+    }
     for (final ring in rings) {
-      for (var i = 0; i < ring.points.length; i++) {
-        if (ring.hides(i)) {
-          continue;
-        }
-        final a = ring.points[i];
-        final b = ring.points[(i + 1) % ring.points.length];
-        final p1 = project(a.e, a.n, floorFt);
-        final p2 = project(b.e, b.n, floorFt);
-        final p3 = project(b.e, b.n, ceilingFt);
-        final p4 = project(a.e, a.n, ceilingFt);
-        final path = ui.Path()
-          ..moveTo(p1.x, p1.y)
-          ..lineTo(p2.x, p2.y)
-          ..lineTo(p3.x, p3.y)
-          ..lineTo(p4.x, p4.y)
-          ..close();
-        final depth = (p1.depth + p2.depth + p3.depth + p4.depth) / 4;
-        final de = b.e - a.e;
-        final dn = b.n - a.n;
-        final len = math.sqrt(de * de + dn * dn);
-        var shade = 0.72;
-        if (len > 1e-6) {
-          final nx = dn / len;
-          final nz = -de / len;
-          shade = (0.55 + 0.45 * (nx * 0.65 + nz * 0.75).abs()).clamp(0.45, 1.0);
-        }
-        final side = Color.lerp(Colors.black, color, shade)!.withAlpha(120);
-        faces.add(_Face(depth, (c) {
-          wall.color = side;
-          c.drawPath(path, wall);
-        }));
-      }
+      _addLiftedWalls(faces, project, [ring.points], ring.tileCut, floorFt,
+          ceilingFt, color, 120);
     }
   }
 
@@ -1361,7 +2458,9 @@ class _AirspacePainter extends CustomPainter {
               continue;
             }
             final a = project(ring.points[i].e, ring.points[i].n, step.$1).o;
-            final b = project(ring.points[(i + 1) % ring.points.length].e, ring.points[(i + 1) % ring.points.length].n, step.$1).o;
+            final b = project(ring.points[(i + 1) % ring.points.length].e,
+                    ring.points[(i + 1) % ring.points.length].n, step.$1)
+                .o;
             if (step.$3) {
               _dash(canvas, a, b, paint);
             } else {
@@ -1403,6 +2502,30 @@ class _AirspacePainter extends CustomPainter {
     }
   }
 
+  void _upArrow(Canvas canvas, Offset base, Offset tip, Color color) {
+    final delta = tip - base;
+    final len = delta.distance;
+    if (len < 2) {
+      return;
+    }
+    final u = delta / len;
+    final n = Offset(-u.dy, u.dx);
+    canvas.drawLine(
+      base,
+      tip,
+      Paint()
+        ..color = color
+        ..strokeWidth = 2
+        ..strokeCap = StrokeCap.round,
+    );
+    final path = ui.Path()
+      ..moveTo(tip.dx, tip.dy)
+      ..lineTo(tip.dx - u.dx * 9 + n.dx * 4.5, tip.dy - u.dy * 9 + n.dy * 4.5)
+      ..lineTo(tip.dx - u.dx * 9 - n.dx * 4.5, tip.dy - u.dy * 9 - n.dy * 4.5)
+      ..close();
+    canvas.drawPath(path, Paint()..color = color);
+  }
+
   void _chevron(Canvas canvas, Offset base, Offset tip, Color color) {
     final delta = tip - base;
     final len = delta.distance;
@@ -1421,17 +2544,23 @@ class _AirspacePainter extends CustomPainter {
   }
 
   /// Red line from the ground to the obstacle top.
-  void _drawObstacles(Canvas canvas, _Proj Function(double, double, double) project) {
+  void _drawObstacles(
+      Canvas canvas, _Proj Function(double, double, double) project) {
     final items = <({Offset foot, Offset top, double depth})>[];
     for (final obstacle in scene.obstacles) {
       final topFt = math.min(obstacle.heightFt, scene.maxAltitudeFt);
-      final ground = project(obstacle.e, obstacle.n, 0);
+      final groundFt = _onSurface(obstacle.e, obstacle.n, 0);
+      if (groundFt >= topFt - 1) {
+        continue;
+      }
+      final ground = project(obstacle.e, obstacle.n, groundFt);
       final top = project(obstacle.e, obstacle.n, topFt);
       var foot = ground.o;
       var tip = top.o;
       final rise = tip - foot;
       if (rise.distance < 8) {
-        final dir = rise.distance < 0.5 ? const Offset(0, -1) : rise / rise.distance;
+        final dir =
+            rise.distance < 0.5 ? const Offset(0, -1) : rise / rise.distance;
         tip = foot + dir * 8;
       }
       items.add((foot: foot, top: tip, depth: (ground.depth + top.depth) / 2));
@@ -1446,53 +2575,210 @@ class _AirspacePainter extends CustomPainter {
     }
   }
 
-  void _drawAirports(Canvas canvas, _Proj Function(double, double, double) project) {
-    const radiusNm = 0.55;
-    const steps = 28;
+  void _drawAirports(
+      Canvas canvas, _Proj Function(double, double, double) project) {
     for (final airport in scene.airports) {
       if (!_classOn(airport.airspaceClass)) {
         continue;
       }
-      final color = _classColor(airport.airspaceClass);
-      final disk = ui.Path();
-      for (var i = 0; i < steps; i++) {
-        final angle = i * 2 * math.pi / steps;
-        final p = project(
-          airport.e + radiusNm * math.sin(angle),
-          airport.n + radiusNm * math.cos(angle),
-          0,
-        );
-        if (i == 0) {
-          disk.moveTo(p.x, p.y);
-        } else {
-          disk.lineTo(p.x, p.y);
-        }
+      final at =
+          project(airport.e, airport.n, _onSurface(airport.e, airport.n, 0));
+      if (at.depth < -2.6) {
+        continue;
       }
-      disk.close();
-      canvas.drawPath(disk, Paint()..color = color);
-      canvas.drawPath(
-        disk,
-        Paint()
-          ..color = Colors.white
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.4,
-      );
-      final at = project(airport.e, airport.n, 0);
-      _text(canvas, airport.ident, at.o + const Offset(12, -14), Colors.white, 13, FontWeight.w700, halo: color);
+      _text(canvas, airport.ident, at.o + const Offset(12, -14), Colors.white,
+          13, FontWeight.w700,
+          halo: _classColor(airport.airspaceClass));
     }
   }
 
-  void _drawHere(Canvas canvas, _Proj Function(double, double, double) project, double maxAlt) {
+  /// Runway diagram on the ground at each airport inside the view.
+  void _drawDiagrams(
+      Canvas canvas, _Proj Function(double, double, double) project) {
+    final marks = <({AirspaceDiagram diagram, _Proj at})>[];
+    for (final diagram in scene.diagrams) {
+      final at = project(diagram.at.e, diagram.at.n,
+          _onSurface(diagram.at.e, diagram.at.n, 0));
+      if (at.depth < -2.6) {
+        continue;
+      }
+      marks.add((diagram: diagram, at: at));
+    }
+    marks.sort((a, b) => b.at.depth.compareTo(a.at.depth));
+    for (final mark in marks) {
+      final reach = _drawAirportDiagram(canvas, project, mark.diagram);
+      if (_diagramLabeled(mark.diagram)) {
+        continue;
+      }
+      _text(
+        canvas,
+        airspaceIdent(mark.diagram.ident),
+        mark.at.o + Offset(0, -(reach + 10)),
+        Colors.white,
+        11,
+        FontWeight.w700,
+        halo: const Color(0xFF212121),
+      );
+    }
+  }
+
+  /// The surface-airspace name already labels this field when it sits on the airport.
+  bool _diagramLabeled(AirspaceDiagram diagram) {
+    final key = airspaceIdent(diagram.ident);
+    for (final airport in scene.airports) {
+      if (!_classOn(airport.airspaceClass) || airport.ident != key) {
+        continue;
+      }
+      final de = airport.e - diagram.at.e;
+      final dn = airport.n - diagram.at.n;
+      if (de * de + dn * dn < 2.25) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Runway strips on the ground, drawn like the long-press AD tab.
+  /// Stroke width is runway feet / 30 and the ends are square. The field is
+  /// enlarged on the ground, and each sample sits on the terrain under it.
+  double _drawAirportDiagram(Canvas canvas,
+      _Proj Function(double, double, double) project, AirspaceDiagram diagram) {
+    final origin = project(
+        diagram.at.e, diagram.at.n, _onSurface(diagram.at.e, diagram.at.n, 0));
+    var longest = 0.0;
+    for (final runway in diagram.runways) {
+      final low = project(runway.low.e, runway.low.n,
+          _onSurface(runway.low.e, runway.low.n, 0));
+      final high = project(runway.high.e, runway.high.n,
+          _onSurface(runway.high.e, runway.high.n, 0));
+      if (low.depth < -2.6 || high.depth < -2.6) {
+        continue;
+      }
+      final span = (high.o - low.o).distance;
+      if (span > longest) {
+        longest = span;
+      }
+    }
+    if (longest == 0) {
+      return 12;
+    }
+    // Half of an AD diagram is the runway. Keep at least that long on screen.
+    final target = (48.0 * math.pow(zoom.clamp(0.45, 8), 0.4))
+        .clamp(36.0, 140.0)
+        .toDouble();
+    final grow = longest < 0.75 ? 1.0 : (target / longest).clamp(1.0, 16.0);
+    var reach = 0.0;
+    for (final runway in diagram.runways) {
+      // Enlarge in east/north, then sit every point on the terrain. Scaling
+      // the screen point lifts the uphill end off a slope.
+      final lowE = diagram.at.e + (runway.low.e - diagram.at.e) * grow;
+      final lowN = diagram.at.n + (runway.low.n - diagram.at.n) * grow;
+      final highE = diagram.at.e + (runway.high.e - diagram.at.e) * grow;
+      final highN = diagram.at.n + (runway.high.n - diagram.at.n) * grow;
+      final lengthNm =
+          math.sqrt(math.pow(highE - lowE, 2) + math.pow(highN - lowN, 2));
+      final steps = (lengthNm / (scene.radiusNm / 16)).ceil().clamp(2, 24);
+      final pts = <Offset>[];
+      var hidden = false;
+      for (var i = 0; i <= steps; i++) {
+        final t = i / steps;
+        final e = lowE + (highE - lowE) * t;
+        final n = lowN + (highN - lowN) * t;
+        final p = project(e, n, _onSurface(e, n, 0));
+        if (p.depth < -2.6) {
+          hidden = true;
+          break;
+        }
+        pts.add(p.o);
+      }
+      if (hidden || pts.length < 2) {
+        continue;
+      }
+      var drawn = 0.0;
+      for (var i = 1; i < pts.length; i++) {
+        drawn += (pts[i] - pts[i - 1]).distance;
+      }
+      if (drawn < 1) {
+        continue;
+      }
+      for (final p in pts) {
+        reach = math.max(reach, (p - origin.o).distance);
+      }
+      var stroke = runway.widthFt / 30.0 * drawn / 160.0;
+      if (stroke < 1.2) {
+        stroke = 1.2;
+      }
+      if (stroke > drawn * 0.08) {
+        stroke = drawn * 0.08;
+      }
+      final path = ui.Path()..moveTo(pts.first.dx, pts.first.dy);
+      for (final p in pts.skip(1)) {
+        path.lineTo(p.dx, p.dy);
+      }
+      canvas.drawPath(
+        path,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = stroke
+          ..strokeCap = StrokeCap.butt
+          ..strokeJoin = StrokeJoin.bevel
+          ..color = _diagramSurface(runway.surface).withValues(alpha: 0.8),
+      );
+      if (drawn > 28) {
+        _runwayIdent(canvas, runway.lowIdent, pts.first, pts.first - pts[1]);
+        _runwayIdent(
+            canvas, runway.highIdent, pts.last, pts.last - pts[pts.length - 2]);
+      }
+    }
+    return reach < 12 ? 12 : reach;
+  }
+
+  /// Runway number just past the pavement, turned along the runway as on the AD tab.
+  void _runwayIdent(Canvas canvas, String ident, Offset at, Offset outward) {
+    if (ident.isEmpty) {
+      return;
+    }
+    final angle = math.atan2(outward.dy, outward.dx);
+    TextPainter painter(Paint? foreground) => TextPainter(
+          text: TextSpan(
+            text: ident,
+            style: TextStyle(
+              color: foreground == null ? Colors.white : null,
+              fontSize: 9,
+              fontWeight: FontWeight.w600,
+              foreground: foreground,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+    final halo = painter(Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.1
+      ..strokeJoin = StrokeJoin.round
+      ..color = const Color(0xFF212121));
+    final fill = painter(null);
+    canvas.save();
+    canvas.translate(at.dx, at.dy);
+    canvas.rotate(angle);
+    final pos = Offset(3, -fill.height / 2);
+    halo.paint(canvas, pos);
+    fill.paint(canvas, pos);
+    canvas.restore();
+  }
+
+  void _drawHere(Canvas canvas, _Proj Function(double, double, double) project,
+      double maxAlt) {
     final paint = Paint()
       ..color = hereColor
       ..strokeWidth = 1.5;
-    final ground = project(0, 0, 0);
+    final ground = project(0, 0, _onSurface(0, 0, 0));
     final top = project(0, 0, maxAlt);
     canvas.drawLine(ground.o, top.o, paint);
     canvas.drawCircle(ground.o, 4, Paint()..color = hereColor);
   }
 
-  void _drawLabel(Canvas canvas, _Proj Function(double, double, double) project, AirspaceShelf shelf) {
+  void _drawLabel(Canvas canvas, _Proj Function(double, double, double) project,
+      AirspaceShelf shelf) {
     var ring = shelf.rings.first.points;
     for (final candidate in shelf.rings.skip(1)) {
       if (candidate.points.length > ring.length) {
@@ -1524,14 +2810,20 @@ class _AirspacePainter extends CustomPainter {
     }
     final floorFt = math.min(shelf.floorFt, scene.maxAltitudeFt);
     final ceilingFt = math.min(shelf.ceilingFt, scene.maxAltitudeFt);
-    final at = project(e, n, (floorFt + ceilingFt) / 2);
+    final bottom = math.min(ceilingFt, _onSurface(e, n, floorFt));
+    final at = project(
+        e, n, bottom >= ceilingFt ? ceilingFt : (bottom + ceilingFt) / 2);
     final color = _classColor(shelf.airspaceClass);
-    _text(canvas, shelf.label, at.o, Color.lerp(color, Colors.white, 0.55)!, 13, FontWeight.w500, outline: Colors.white);
+    _text(canvas, shelf.label, at.o, Color.lerp(color, Colors.white, 0.55)!, 13,
+        FontWeight.w500,
+        outline: Colors.white);
   }
 
-  void _drawPlan(Canvas canvas, _Proj Function(double, double, double) project, double maxAlt) {
+  void _drawPlan(Canvas canvas, _Proj Function(double, double, double) project,
+      double maxAlt) {
     final route = Storage().route;
-    final altitude = route.altitude.toDouble().clamp(0.0, maxAlt).toDouble();
+    final double fallback =
+        route.altitude.toDouble().clamp(0.0, maxAlt).toDouble();
     final border = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 5
@@ -1543,43 +2835,59 @@ class _AirspacePainter extends CustomPainter {
       ..strokeWidth = 3
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
-    void stroke(List<LatLng> path, Color color) {
-      for (final piece in clipPathToView(_planOffsets(center, path))) {
-        if (piece.length < 2) {
+    void stroke(List<LatLng> path, List<double> altitudes, Color color) {
+      final List<_AltNm> located = [];
+      for (int index = 0; index < path.length; index++) {
+        final offset = ownshipOffsetNm(center, path[index], radiusNm: null);
+        if (offset == null) {
           continue;
         }
-        final drawn = ui.Path();
-        final first = project(piece.first.e, piece.first.n, altitude);
-        drawn.moveTo(first.x, first.y);
-        for (final point in piece.skip(1)) {
-          final at = project(point.e, point.n, altitude);
-          drawn.lineTo(at.x, at.y);
+        final double altitude =
+            index < altitudes.length ? altitudes[index] : fallback;
+        located.add(_AltNm(offset, altitude.clamp(0.0, maxAlt).toDouble()));
+      }
+      line.color = color;
+      for (final List<_AltNm> piece in _clipAltPath(located)) {
+        for (int index = 1; index < piece.length; index++) {
+          final _AltNm from = piece[index - 1];
+          final _AltNm to = piece[index];
+          final _Proj start =
+              project(from.point.e, from.point.n, from.altitudeFt);
+          final _Proj end = project(to.point.e, to.point.n, to.altitudeFt);
+          canvas.drawLine(start.o, end.o, border);
+          canvas.drawLine(start.o, end.o, line);
         }
-        canvas.drawPath(drawn, border);
-        line.color = color;
-        canvas.drawPath(drawn, line);
       }
     }
 
-    stroke(route.getPathPassed(), Constants.planPassedColor);
-    stroke(route.getPathCurrent(), Constants.planCurrentColor);
-    stroke(route.getPathNext(), Constants.planNextColor);
+    stroke(route.getPathPassed(), route.getPathPassedAltitudes(),
+        Constants.planPassedColor);
+    stroke(route.getPathCurrent(), route.getPathCurrentAltitudes(),
+        Constants.planCurrentColor);
+    stroke(route.getPathNext(), route.getPathNextLineAltitudes(),
+        Constants.planNextColor);
   }
 
   /// Translucent cone from the aircraft down to the glide ring.
-  void _addGlideCone(List<_Face> faces, _Proj Function(double, double, double) project, double maxAlt) {
+  void _addGlideCone(List<_Face> faces,
+      _Proj Function(double, double, double) project, double maxAlt) {
     final apex = _liveOwnship;
     final ring = _glideGround(maxAlt);
     if (apex == null || ring == null) {
       return;
     }
-    final fill = Constants.glideCircleHaloColor.withAlpha(110);
+    final fill = Constants.glideCircleHaloColor.withAlpha(64);
     for (var i = 0; i < ring.length - 1; i++) {
       final start = ring[i];
       final end = ring[i + 1];
-      final p1 = project(apex.offset.e, apex.offset.n, apex.altFt.clamp(0.0, maxAlt).toDouble());
+      final p1 = project(apex.offset.e, apex.offset.n,
+          apex.altFt.clamp(0.0, maxAlt).toDouble());
       final p2 = project(start.e, start.n, start.h);
       final p3 = project(end.e, end.n, end.h);
+      // A ring point behind the camera projects across the whole picture and hides the ground.
+      if (p1.depth < -2.6 || p2.depth < -2.6 || p3.depth < -2.6) {
+        continue;
+      }
       final path = ui.Path()
         ..moveTo(p1.x, p1.y)
         ..lineTo(p2.x, p2.y)
@@ -1612,13 +2920,17 @@ class _AirspacePainter extends CustomPainter {
       }
       final ground = mesh == null
           ? 0.0
-          : (sampleTerrainFt(mesh.elevFt, mesh.cols, mesh.rows, offset.e, offset.n, scene.radiusNm) ?? 0);
-      points.add((e: offset.e, n: offset.n, h: ground.clamp(0.0, maxAlt).toDouble()));
+          : (sampleTerrainFt(mesh.elevFt, mesh.cols, mesh.rows, offset.e,
+                  offset.n, scene.radiusNm) ??
+              0);
+      points.add(
+          (e: offset.e, n: offset.n, h: ground.clamp(0.0, maxAlt).toDouble()));
     }
     return points.length >= 3 ? points : null;
   }
 
-  void _drawGlide(Canvas canvas, _Proj Function(double, double, double) project, double maxAlt) {
+  void _drawGlide(Canvas canvas, _Proj Function(double, double, double) project,
+      double maxAlt) {
     final ring = _glideGround(maxAlt);
     if (ring == null) {
       return;
@@ -1648,8 +2960,11 @@ class _AirspacePainter extends CustomPainter {
     canvas.drawPath(drawn, line);
   }
 
-  void _text(Canvas canvas, String text, Offset at, Color color, double size, FontWeight weight, {Color? halo, Color? outline}) {
-    Offset place(TextPainter painter) => at - Offset(painter.width / 2, painter.height / 2);
+  void _text(Canvas canvas, String text, Offset at, Color color, double size,
+      FontWeight weight,
+      {Color? halo, Color? outline}) {
+    Offset place(TextPainter painter) =>
+        at - Offset(painter.width / 2, painter.height / 2);
     if (outline != null) {
       final stroke = TextPainter(
         text: TextSpan(
@@ -1677,7 +2992,8 @@ class _AirspacePainter extends CustomPainter {
           fontWeight: weight,
           shadows: [
             if (halo != null) Shadow(color: halo, blurRadius: 3),
-            if (outline == null) const Shadow(color: Colors.black54, blurRadius: 2),
+            if (outline == null)
+              const Shadow(color: Colors.black54, blurRadius: 2),
           ],
         ),
       ),
@@ -1708,6 +3024,9 @@ class _AirspacePainter extends CustomPainter {
         oldDelegate.showPlan != showPlan ||
         oldDelegate.showObstacles != showObstacles ||
         oldDelegate.showSua != showSua ||
+        oldDelegate.showGlide != showGlide ||
+        oldDelegate.terrainByOwnship != terrainByOwnship ||
+        oldDelegate.extraTopFt != extraTopFt ||
         oldDelegate.showTerrainMesh != showTerrainMesh;
   }
 }
@@ -1740,13 +3059,16 @@ class _OwnshipPulse extends StatefulWidget {
   State<_OwnshipPulse> createState() => _OwnshipPulseState();
 }
 
-class _OwnshipPulseState extends State<_OwnshipPulse> with SingleTickerProviderStateMixin {
+class _OwnshipPulseState extends State<_OwnshipPulse>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _cycle;
 
   @override
   void initState() {
     super.initState();
-    _cycle = AnimationController(vsync: this, duration: const Duration(seconds: 1))..repeat();
+    _cycle =
+        AnimationController(vsync: this, duration: const Duration(seconds: 1))
+          ..repeat();
   }
 
   @override
@@ -1817,7 +3139,9 @@ class _OwnshipPulsePainter extends CustomPainter {
       return;
     }
     final rawAlt = pos.altitude * _Airspace3DViewState._metersToFeet;
-    final alt = (rawAlt.isFinite && rawAlt > 0 ? rawAlt : 0.0).clamp(0.0, maxAltitudeFt).toDouble();
+    final alt = (rawAlt.isFinite && rawAlt > 0 ? rawAlt : 0.0)
+        .clamp(0.0, maxAltitudeFt)
+        .toDouble();
     final at = _projectView(
       size,
       offset.e,

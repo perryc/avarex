@@ -23,29 +23,155 @@ class MainDatabaseHelper {
 
   static const String _limit = "20"; // limit results
 
+  // True while main.db is being replaced/removed on disk (DatabasesX
+  // download/delete). Nobody may open the file during that time: a connection
+  // opened on a half written database (or one that picks up the old database's
+  // -wal/-journal file) is how main.db gets corrupted.
+  static bool _replacing = false;
+  static Future<Database>? _opening;
+  static int _generation = 0; // bumped on every invalidateConnection()
+  // Cached sqlite_master lookup for findNear. Remove with [_hasNearIndexes]
+  // once every installed main.db has the lat/lon indexes.
+  static bool? _nearIndexes;
+  // Cached sqlite_master lookup for cifp. Remove with [_hasCifpIndex]
+  // once every installed main.db has idx_cifp_loc.
+  static bool? _cifpIndex;
+
   Future<Database?> get database async {
-    if (_database != null) {
-      return _database;
+    if (_replacing) {
+      return null; // callers already treat a null database as "no data"
     }
-    _database = await _initDB();
-    return _database;
+    final Database? existing = _database;
+    if (existing != null) {
+      return existing;
+    }
+    // Share one in-flight open so invalidateConnection() can wait for it.
+    final int generation = _generation;
+    final Future<Database> opening = _opening ??= _initDB();
+    try {
+      final Database db = await opening;
+      if (_replacing || generation != _generation) {
+        return null; // invalidated while opening; the connection was closed
+      }
+      _database = db;
+      return db;
+    }
+    finally {
+      if (identical(_opening, opening)) {
+        _opening = null;
+      }
+    }
   }
 
   Future<Database> _initDB() async {
     Directory documentsDirectory = Directory(Storage().dataDir);
     String path = join(documentsDirectory.path, "main.db");
-    return
-      await openDatabase(path, onOpen: (db) {});
+    return await openDatabase(path, onOpen: (db) {});
+  }
+
+  /// True when this main.db contains idx_airports_arp, idx_nav_arp, and
+  /// idx_fix_arp (added in apps4av/data x/importother.sql).
+  ///
+  /// Temporary. Databases from before that cycle have no such indexes, and
+  /// [findNear] falls back to the full-table query for them. When those files
+  /// are gone, delete this method, [_nearIndexes], and both [_nearIndexes]
+  /// clears in [invalidateConnection].
+  static Future<bool> _hasNearIndexes(Database db) async {
+    final bool? known = _nearIndexes;
+    if (known != null) {
+      return known;
+    }
+    final List<Map<String, Object?>> rows = await DbGeneral.query(db,
+        "SELECT name FROM sqlite_master WHERE type = 'index' AND name IN ('idx_airports_arp', 'idx_nav_arp', 'idx_fix_arp')");
+    final Set<String> names = {
+      for (final Map<String, Object?> row in rows)
+        if (row['name'] is String) row['name'] as String,
+    };
+    final bool ready = names.contains('idx_airports_arp') &&
+        names.contains('idx_nav_arp') &&
+        names.contains('idx_fix_arp');
+    _nearIndexes = ready;
+    return ready;
+  }
+
+  /// True when this main.db contains idx_cifp_loc on cifp(LocationID)
+  /// (added in apps4av/data x/importother.sql).
+  ///
+  /// Temporary. Older files have no such index, and the cifp queries fall
+  /// back to the old trim() query in the else branch. When those files are
+  /// gone, delete this method, [_cifpIndex], both [_cifpIndex] clears in
+  /// [invalidateConnection], and the else branch in findProcedures,
+  /// findDestinations, findProcedure, and findProcedureProfile.
+  static Future<bool> _hasCifpIndex(Database db) async {
+    final bool? known = _cifpIndex;
+    if (known != null) {
+      return known;
+    }
+    final List<Map<String, Object?>> rows = await DbGeneral.query(db,
+        "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_cifp_loc'");
+    final bool ready = rows.isNotEmpty;
+    _cifpIndex = ready;
+    return ready;
+  }
+
+  /// Search square in degrees. Longitude is widened by 1/cos(latitude) so each
+  /// side covers about the same ground distance.
+  (double, double, double, double) _nearBounds(LatLng point, double factor) {
+    final double latRadius = sqrt(factor);
+    double cosLat = cos(point.latitude * pi / 180.0).abs();
+    if (cosLat < 0.01) {
+      cosLat = 0.01;
+    }
+    final double lonRadius = latRadius / cosLat;
+    return (
+      point.latitude - latRadius,
+      point.latitude + latRadius,
+      point.longitude - lonRadius,
+      point.longitude + lonRadius,
+    );
+  }
+
+  /// Call before main.db is replaced or removed on disk. Closes the connection
+  /// and keeps it closed (queries return no data) until [endReplace].
+  static Future<void> beginReplace() async {
+    _replacing = true;
+    await invalidateConnection();
+  }
+
+  /// Call after main.db was replaced or removed; the next query reopens it.
+  static Future<void> endReplace() async {
+    await invalidateConnection();
+    _replacing = false;
   }
 
   /// Close the cached connection after [main.db] was replaced or removed on disk
   /// (e.g. DatabasesX download/delete) so the next open uses the new file.
   static Future<void> invalidateConnection() async {
-    final db = _database;
-    if (db != null) {
-      await db.close();
-      _database = null;
+    _generation++;
+    _nearIndexes = null; // remove with _hasNearIndexes
+    _cifpIndex = null; // remove with _hasCifpIndex
+    // an open that is still in flight would otherwise be cached afterwards
+    final Future<Database>? opening = _opening;
+    if (opening != null) {
+      try {
+        final Database db = await opening;
+        await db.close();
+      }
+      catch (_) {}
+      _opening = null;
     }
+    final db = _database;
+    _database = null;
+    if (db != null) {
+      try {
+        await db.close();
+      }
+      catch (_) {}
+    }
+    // A check that finished while this connection was closing belongs to the
+    // file just closed. Remove these clears with _hasNearIndexes and _hasCifpIndex.
+    _nearIndexes = null;
+    _cifpIndex = null;
   }
 
   Future<List<LatLng>> findObstacles(LatLng point, double altitude) async {
@@ -64,8 +190,22 @@ class MainDatabaseHelper {
   Future<List<String>> findProcedures(String airportIdentifier) async {
     final db = await database;
     if (db != null) {
-      String qry = "select distinct LocationID, procedure, ifix from cifp where"
-          " trim(LocationID) = '$airportIdentifier'";
+      // The LocationID query needs idx_cifp_loc. Until every installed main.db
+      // has it, a file without the index uses the old query in the else branch.
+      // Delete that branch, [_hasCifpIndex], [_cifpIndex], and the [_cifpIndex]
+      // clears in [invalidateConnection] once those databases are gone. This
+      // method then always runs the LocationID query.
+      String qry;
+      if (await _hasCifpIndex(db)) {
+        qry = "select distinct LocationID, procedure, ifix from cifp where"
+            " LocationID = '$airportIdentifier'";
+      }
+      else {
+        // Old query for main.db files that predate idx_cifp_loc. Remove this
+        // branch together with _hasCifpIndex.
+        qry = "select distinct LocationID, procedure, ifix from cifp where"
+            " trim(LocationID) = '$airportIdentifier'";
+      }
       return DbGeneral.query(db, qry).then((maps) {
         return List.generate(maps.length, (i) {
           String id = (maps[i]['procedure'] as String).trim();
@@ -145,19 +285,41 @@ class MainDatabaseHelper {
       List<String> segments = match.split(".");
       if(segments.isNotEmpty) {
         airport = segments[0].toUpperCase();
-        String match = "";
-        if(segments.length == 2) {
-          match = exact ?
-            " and trim(procedure) =    '${segments[1].toUpperCase()}'  and trim(ifix) = ''" :
-            " and trim(procedure) like '${segments[1].toUpperCase()}%'";
+        String qry;
+        // idx_cifp_loc walks LocationID. The else branch is the old query.
+        // Remove it with _hasCifpIndex.
+        if (await _hasCifpIndex(db)) {
+          String match = "";
+          if(segments.length == 2) {
+            match = exact ?
+              " and procedure =    '${segments[1].toUpperCase()}'  and ifix = ''" :
+              " and procedure like '${segments[1].toUpperCase()}%'";
+          }
+          else if(segments.length >= 3) {
+            match = exact ?
+              " and procedure =    '${segments[1].toUpperCase()}'  and ifix = '${segments[2].toUpperCase()}'" :
+              " and procedure like '${segments[1].toUpperCase()}%' and ifix like '${segments[2].toUpperCase()}%'";
+          }
+          qry = "select distinct LocationID, procedure, ifix from cifp where"
+            " LocationID = '$airport' $match";
         }
-        else if(segments.length >= 3) {
-          match = exact ?
-            " and trim(procedure) =    '${segments[1].toUpperCase()}'  and trim(ifix) = '${segments[2].toUpperCase()}'" :
-            " and trim(procedure) like '${segments[1].toUpperCase()}%' and trim(ifix) like '${segments[2].toUpperCase()}%'";
+        else {
+          // Old query for main.db files that predate idx_cifp_loc. Remove this
+          // branch together with _hasCifpIndex.
+          String match = "";
+          if(segments.length == 2) {
+            match = exact ?
+              " and trim(procedure) =    '${segments[1].toUpperCase()}'  and trim(ifix) = ''" :
+              " and trim(procedure) like '${segments[1].toUpperCase()}%'";
+          }
+          else if(segments.length >= 3) {
+            match = exact ?
+              " and trim(procedure) =    '${segments[1].toUpperCase()}'  and trim(ifix) = '${segments[2].toUpperCase()}'" :
+              " and trim(procedure) like '${segments[1].toUpperCase()}%' and trim(ifix) like '${segments[2].toUpperCase()}%'";
+          }
+          qry = "select distinct LocationID, procedure, ifix from cifp where"
+            " trim(LocationID) = '$airport' $match";
         }
-        String qry = "select distinct LocationID, procedure, ifix from cifp where"
-          " trim(LocationID) = '$airport' $match";
         mapsProcedures = await DbGeneral.query(db, qry);
       }
     }
@@ -233,12 +395,32 @@ class MainDatabaseHelper {
           .longitude}) * (ARPLongitude - ${point.longitude}) * ${corrFactor
           .toDouble()} + (ARPLatitude - ${point
           .latitude}) * (ARPLatitude - ${point.latitude}))";
-
-      String qry =
-          "      select LocationID, ARPLatitude, ARPLongitude, FacilityName, Type, $asDistance as distance from airports where distance < $factor and (Type = 'AIRPORT' or Type = 'SEAPLANE BAS') " // only what shows on chart
-          "union select LocationID, ARPLatitude, ARPLongitude, FacilityName, Type, $asDistance as distance from nav      where distance < $factor and (Type != 'VOT') "
-          "union select LocationID, ARPLatitude, ARPLongitude, FacilityName, Type, $asDistance as distance from fix      where distance < $factor "
-          "order by Type asc, distance asc limit $_limit";
+      // The square query needs idx_airports_arp, idx_nav_arp, and idx_fix_arp.
+      // Until every installed main.db has them, a file without the indexes uses
+      // the old full-table query in the else branch. Delete that branch,
+      // [_hasNearIndexes], [_nearIndexes], and the [_nearIndexes] clears in
+      // [invalidateConnection] once those databases are gone. This method then
+      // always runs the square query.
+      String qry;
+      if (await _hasNearIndexes(db)) {
+        final (double minLat, double maxLat, double minLon, double maxLon) = _nearBounds(point, factor);
+        // distance is selected only so the rows can be sorted. The square is the search.
+        String box = "ARPLatitude > $minLat and ARPLatitude < $maxLat and ARPLongitude > $minLon and ARPLongitude < $maxLon";
+        qry =
+            "      select LocationID, ARPLatitude, ARPLongitude, FacilityName, Type, $asDistance as distance from airports where $box and (Type = 'AIRPORT' or Type = 'SEAPLANE BAS') " // only what shows on chart
+            "union all select LocationID, ARPLatitude, ARPLongitude, FacilityName, Type, $asDistance as distance from nav      where $box and (Type != 'VOT') "
+            "union all select LocationID, ARPLatitude, ARPLongitude, FacilityName, Type, $asDistance as distance from fix      where $box "
+            "order by Type asc, distance asc limit $_limit";
+      }
+      else {
+        // Old query for main.db files that predate the lat/lon indexes. Remove
+        // this branch together with _hasNearIndexes.
+        qry =
+            "      select LocationID, ARPLatitude, ARPLongitude, FacilityName, Type, $asDistance as distance from airports where distance < $factor and (Type = 'AIRPORT' or Type = 'SEAPLANE BAS') " // only what shows on chart
+            "union select LocationID, ARPLatitude, ARPLongitude, FacilityName, Type, $asDistance as distance from nav      where distance < $factor and (Type != 'VOT') "
+            "union select LocationID, ARPLatitude, ARPLongitude, FacilityName, Type, $asDistance as distance from fix      where distance < $factor "
+            "order by Type asc, distance asc limit $_limit";
+      }
       List<Map<String, dynamic>> maps = await DbGeneral.query(db, qry);
 
       ret = List.generate(maps.length, (i) {
@@ -378,6 +560,56 @@ class MainDatabaseHelper {
     return null;
   }
 
+  /// Airports inside a latitude/longitude box with their runways, frequencies and
+  /// AWOS, for the glide-range runway search. Three queries in all, not three per
+  /// airport.
+  Future<List<AirportDestination>> findAirportsInBounds(
+      double minLat, double maxLat, double minLon, double maxLon) async {
+    final List<AirportDestination> ret = [];
+    final db = await database;
+    if (db == null) {
+      return ret;
+    }
+    final List<Map<String, dynamic>> airports = await DbGeneral.query(db,
+        "select * from airports where Type = 'AIRPORT' and ARPLatitude > ? and ARPLatitude < ? and ARPLongitude > ? and ARPLongitude < ?",
+        params: [minLat, maxLat, minLon, maxLon]);
+    if (airports.isEmpty) {
+      return ret;
+    }
+    final List<String> dlids = [];
+    for (final Map<String, dynamic> a in airports) {
+      final String id = (a['DLID'] ?? '').toString();
+      if (id.isNotEmpty) {
+        dlids.add(id);
+      }
+    }
+    final Map<String, List<Map<String, dynamic>>> runways = {};
+    final Map<String, List<Map<String, dynamic>>> freqs = {};
+    // keep the number of bound parameters under the SQLite limit
+    const int chunk = 500;
+    for (int i = 0; i < dlids.length; i += chunk) {
+      final List<String> part = dlids.sublist(i, min(i + chunk, dlids.length));
+      final String marks = List.filled(part.length, '?').join(',');
+      for (final Map<String, dynamic> r in await DbGeneral.query(db,
+          "select * from airportrunways where DLID in ($marks)", params: part)) {
+        runways.putIfAbsent((r['DLID'] ?? '').toString(), () => []).add(r);
+      }
+      for (final Map<String, dynamic> f in await DbGeneral.query(db,
+          "select * from airportfreq where DLID in ($marks)", params: part)) {
+        freqs.putIfAbsent((f['DLID'] ?? '').toString(), () => []).add(f);
+      }
+    }
+    for (final Map<String, dynamic> a in airports) {
+      final String id = (a['DLID'] ?? '').toString();
+      try {
+        ret.add(AirportDestination.fromMap(a, freqs[id] ?? [], [], runways[id] ?? []));
+      } catch (_) {
+        // skip an airport with unreadable fields
+      }
+    }
+    return ret;
+  }
+
   Future<NavDestination?> findNav(String nav) async {
     List<Map<String, dynamic>> maps = [];
     final db = await database;
@@ -445,12 +677,23 @@ class MainDatabaseHelper {
       segments.add("");
     }
 
-    // sid/star/transition
-    qry = "select * from cifp where trim(LocationID) = '${segments[0].toUpperCase()}'"
-        " and trim(procedure) = '${segments[1].toUpperCase()}'"
-        " and trim(ifix) = '${segments[2].toUpperCase()}'"
-        " order by trim(sequence) asc";
+    // sid/star/transition. idx_cifp_loc walks LocationID. The else branch is
+    // the old query. Remove it with _hasCifpIndex.
     final db = await database;
+    if (db != null && await _hasCifpIndex(db)) {
+      qry = "select * from cifp where LocationID = '${segments[0].toUpperCase()}'"
+          " and procedure = '${segments[1].toUpperCase()}'"
+          " and ifix = '${segments[2].toUpperCase()}'"
+          " order by sequence asc";
+    }
+    else {
+      // Old query for main.db files that predate idx_cifp_loc. Remove this
+      // branch together with _hasCifpIndex.
+      qry = "select * from cifp where trim(LocationID) = '${segments[0].toUpperCase()}'"
+          " and trim(procedure) = '${segments[1].toUpperCase()}'"
+          " and trim(ifix) = '${segments[2].toUpperCase()}'"
+          " order by trim(sequence) asc";
+    }
     if (db != null) {
       maps = await DbGeneral.query(db, qry);
     }
@@ -516,11 +759,24 @@ class MainDatabaseHelper {
       segments.add("");
     }
 
-    String qry = "select * from cifp where trim(LocationID) = '${segments[0].toUpperCase()}'"
-        " and trim(procedure) = '${segments[1].toUpperCase()}'"
-        " and trim(ifix) = '${segments[2].toUpperCase()}'"
-        " order by trim(sequence) asc";
+    // Same lookup as findProcedure. The else branch is the old query. Remove
+    // it with _hasCifpIndex.
     final db = await database;
+    String qry;
+    if (db != null && await _hasCifpIndex(db)) {
+      qry = "select * from cifp where LocationID = '${segments[0].toUpperCase()}'"
+          " and procedure = '${segments[1].toUpperCase()}'"
+          " and ifix = '${segments[2].toUpperCase()}'"
+          " order by sequence asc";
+    }
+    else {
+      // Old query for main.db files that predate idx_cifp_loc. Remove this
+      // branch together with _hasCifpIndex.
+      qry = "select * from cifp where trim(LocationID) = '${segments[0].toUpperCase()}'"
+          " and trim(procedure) = '${segments[1].toUpperCase()}'"
+          " and trim(ifix) = '${segments[2].toUpperCase()}'"
+          " order by trim(sequence) asc";
+    }
     if (db != null) {
       maps = await DbGeneral.query(db, qry);
     }

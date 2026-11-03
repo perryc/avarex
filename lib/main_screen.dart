@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:avaremp/community/notifications_screen.dart';
 import 'package:avaremp/onboarding_screen.dart';
 import 'package:avaremp/services/app_notice_service.dart';
@@ -6,9 +8,9 @@ import 'package:avaremp/plate_screen.dart';
 import 'package:avaremp/services/login_screen.dart';
 import 'package:avaremp/storage.dart';
 import 'package:avaremp/utils/pdf_viewer.dart';
+import 'package:avaremp/utils/user_manual.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_material_design_icons/flutter_material_design_icons.dart';
-import 'package:universal_io/io.dart';
 import 'constants.dart';
 import 'map_screen.dart';
 import 'find_screen.dart';
@@ -31,6 +33,9 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver { //
 
   bool _drawerOpen = false;
   int _selectedIndex = tabLocationMap; // for various tab screens
+  // Map is showing at launch. Plate is built on the first visit and then kept,
+  // so switching between Map and Plate does not reload the chart or the plate.
+  final List<bool> _tabMounted = [true, false, false, false];
   bool _noticesOpen = false;
   DateTime _noticesCheckedAt = DateTime.fromMillisecondsSinceEpoch(0);
 
@@ -44,10 +49,17 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver { //
     _widgetOptions.insert(tabLocationFind, FindScreen());
   }
 
+  bool _keptTab(int index) => index == tabLocationMap || index == tabLocationPlates;
+
   void mOnItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
+      if (_keptTab(index)) {
+        _tabMounted[index] = true;
+      }
     });
+    MapScreenState.setVisible(index == tabLocationMap);
+    PlateScreenState.setVisible(index == tabLocationPlates);
   }
 
   Widget _buildSectionHeader(BuildContext context, String title) {
@@ -186,11 +198,20 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver { //
                 actions: <Widget>[
                   TextButton(
                     child: const Text('Yes'),
-                    onPressed: () {
-                      SystemNavigator.pop();
+                    onPressed: () async {
+                      await SystemNavigator.pop();
+                      // On Android pop() only closes the screen and leaves the
+                      // process cached in the background. Kill the process so
+                      // GPS, downloads, and timers stop too. Other platforms
+                      // keep the normal pop.
+                      if (Platform.isAndroid) {
+                        exit(0);
+                      }
                     },
                   ),
-                  TextButton(
+                  // No is the default: highlighted and focused.
+                  FilledButton(
+                    autofocus: true,
                     child: const Text('No'),
                     onPressed: () {
                       Navigator.of(context).pop();
@@ -343,6 +364,16 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver { //
                       ),
                       _buildMenuItem(
                         context,
+                        icon: Icons.thunderstorm_outlined,
+                        title: "3D Weather",
+                        subtitle: "Winds aloft, radar, lightning, icing, and turbulence",
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.pushNamed(context, '/weather3d');
+                        },
+                      ),
+                      _buildMenuItem(
+                        context,
                         icon: MdiIcons.airplaneCog,
                         title: "PFD",
                         subtitle: "Attitude, speed, altitude, course",
@@ -477,6 +508,17 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver { //
                       ],
                       const SizedBox(height: 8),
                       _buildSectionHeader(context, "Support"),
+                      if (Constants.firebaseAvailable)
+                        _buildMenuItem(
+                          context,
+                          icon: Icons.campaign_outlined,
+                          title: "Messages",
+                          subtitle: "Notices from Apps4Av",
+                          onTap: () {
+                            Navigator.pop(context);
+                            Navigator.pushNamed(context, '/messages');
+                          },
+                        ),
                       if (Constants.shouldShowPdf)
                         _buildMenuItem(
                           context,
@@ -485,15 +527,10 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver { //
                           subtitle: "User manual",
                           onTap: () async {
                             Navigator.pop(context);
-                            final String pdfPath = '${Storage().dataDir}/USER_MANUAL.pdf';
-                            final File pdfFile = File(pdfPath);
-                            if (!await pdfFile.exists()) {
-                              final ByteData data = await rootBundle.load('assets/docs/USER_MANUAL.pdf');
-                              await pdfFile.writeAsBytes(data.buffer.asUint8List());
-                            }
-                            if (context.mounted) {
+                            final String? pdfPath = await UserManual.install();
+                            if (pdfPath != null && context.mounted) {
                               Navigator.of(context).push(
-                                MaterialPageRoute(builder: (context) => PdfViewer(pdfPath)),
+                                MaterialPageRoute(builder: (context) => PdfViewer(pdfPath, title: 'User Manual')),
                               );
                             }
                           },
@@ -505,8 +542,28 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver { //
             ),
           ),
         ),
-        body: Center(
-          child: _widgetOptions.elementAt(_selectedIndex),
+        // Keep Map and Plate after they have been opened. Swapping them out
+        // reloaded the chart and the plate image.
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            for (int i = 0; i < _widgetOptions.length; i++)
+              if (_keptTab(i) && _tabMounted[i])
+                Offstage(
+                  offstage: _selectedIndex != i,
+                  child: ExcludeFocus(
+                    // A hidden tab stays mounted. Its controls must not take
+                    // focus when another route is popped.
+                    excluding: _selectedIndex != i,
+                    child: TickerMode(
+                      enabled: _selectedIndex == i,
+                      child: _widgetOptions[i],
+                    ),
+                  ),
+                ),
+            if (!_keptTab(_selectedIndex))
+              _widgetOptions[_selectedIndex],
+          ],
         ),
         bottomNavigationBar: Container(
           padding: const EdgeInsets.all(5),

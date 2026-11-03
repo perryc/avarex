@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math';
 
 import 'package:avaremp/gdl90/adsb_status_screen.dart';
@@ -18,7 +19,11 @@ import '../io/gps.dart';
 
 
 class InstrumentList extends StatefulWidget {
-  const InstrumentList({super.key});
+  // False while this list's tab is covered, so GPS and the clock do not
+  // rebuild an instrument bar that is off screen.
+  final bool active;
+
+  const InstrumentList({super.key, this.active = true});
 
   @override
   State<InstrumentList> createState() => InstrumentListState();
@@ -34,6 +39,8 @@ class InstrumentList extends StatefulWidget {
 
 class InstrumentListState extends State<InstrumentList> {
   static final DateFormat _hourMinuteFormatter = DateFormat('HH:mm');
+  // Tile background while the map is track-up. North-up keeps the normal tile color.
+  static const Color _trackUpColor = Color(0xFF808000);
   final List<String> _items = Storage().settings.getInstruments().split(","); // get instruments
   late List<Color> _itemsColors;
   // Fractional (0..1) top-left position of each tile, keyed by tile code.
@@ -60,6 +67,7 @@ class InstrumentListState extends State<InstrumentList> {
   String _flightTime = "00:00";
   String _gel = "DL";
   String _adsb = "\u25cb"; // ADSB tile value: ownship tail number, else status circle
+  String _res = "0\n0"; // RES tile: current and maximum RSS memory
   Color? _adsbColor; // callsign/circle color: null=default/disconnected, yellow=partial, green=connected
 
   @override
@@ -96,7 +104,25 @@ class InstrumentListState extends State<InstrumentList> {
   }
 
 
+  @override
+  void didUpdateWidget(InstrumentList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !oldWidget.active) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !widget.active) {
+          return;
+        }
+        _gpsListener();
+        _routeListener();
+        _timeListener();
+      });
+    }
+  }
+
   void _gpsListener() {
+    if (!widget.active) {
+      return;
+    }
     // connect to GPS
     double variation = Storage().area.variation;
     setState(() {
@@ -184,6 +210,9 @@ class InstrumentListState extends State<InstrumentList> {
   }
 
   void _routeListener() {
+    if (!widget.active) {
+      return;
+    }
     setState(() {
       PlanRoute? route = Storage().route;
       Destination? d = route.getCurrentWaypoint()?.destination;
@@ -214,6 +243,9 @@ class InstrumentListState extends State<InstrumentList> {
   }
 
   void _timeListener() {
+    if (!widget.active) {
+      return;
+    }
     setState(() {
       _timerUp = _truncate(Storage().flightTimer.getTime().toString().substring(2, 7));
       _timerDown = _truncate(Storage().flightDownTimer.getTime().toString().substring(2, 7));
@@ -224,6 +256,8 @@ class InstrumentListState extends State<InstrumentList> {
           : (Storage().flightDownTimer.isStarted() ? Colors.green : defaultColor);
       // UPT: green when counting, default otherwise
       _itemsColors[_items.indexOf("UPT")] = Storage().flightTimer.isStarted() ? Colors.green : defaultColor;
+      // MT: olive while track-up, normal tile color while north-up
+      _itemsColors[_items.indexOf("MT")] = Storage().settings.getNorthUp() ? defaultColor : _trackUpColor;
       _utc = _truncate(_hourMinuteFormatter.format(DateTime.now().toUtc()));
       _source = Storage().getGpsSourceModeString();
       // Auto = default tile color, Green = Internal, Blue = External
@@ -239,7 +273,20 @@ class InstrumentListState extends State<InstrumentList> {
       _adsb = adsbCallsign.isNotEmpty ? adsbCallsign : (connected ? "\u25cf" : "\u25cb");
       _adsbColor = !connected ? null : (gpsValid ? Colors.green : Colors.yellow);
       _flightTime = _truncate((Storage().flightStatus.flightTime.toDouble() / 3600).toStringAsFixed(2));
+      _res = _memoryString();
     });
+  }
+
+  // RES tile: resident set size of the app, current and maximum, in MB.
+  String _memoryString() {
+    try {
+      final int current = (ProcessInfo.currentRss / (1024 * 1024)).round();
+      final int maximum = (ProcessInfo.maxRss / (1024 * 1024)).round();
+      return "$current\n${max(current, maximum)}";
+    }
+    catch (e) {
+      return "-";
+    }
   }
 
   InstrumentListState() {
@@ -299,6 +346,12 @@ class InstrumentListState extends State<InstrumentList> {
     setState(() {
       _source = Storage().getGpsSourceModeString();
     });
+  }
+
+  // MT tile: flip the map between north-up and track-up.
+  void _toggleNorthUp() {
+    Storage().toggleNorthUp();
+    setState(() {});
   }
 
   // ADS-B tile tap: open the receiver status screen.
@@ -452,6 +505,7 @@ class InstrumentListState extends State<InstrumentList> {
         break;
       case "MT":
         value = _magneticHeading;
+        cb = _toggleNorthUp;
         break;
       case "PRV":
         value = _previousDestination;
@@ -498,6 +552,9 @@ class InstrumentListState extends State<InstrumentList> {
         value = _flightTime;
         cb = _resetTacTimer;
         break;
+      case "RES":
+        value = _res;
+        break;
       case "ADSB":
         value = _adsb; // tail number when reported, otherwise the status circle
         valueColor = _adsbColor;
@@ -527,7 +584,7 @@ class InstrumentListState extends State<InstrumentList> {
           child: Column(
             children: [
               Expanded(flex: 2, child: SizedBox(width: width - 10, child: FittedBox(child: Text(_items[index], style: const TextStyle( ), maxLines: 1,)))),
-              Expanded(flex: 3, child: SizedBox(width: width - 10, child: FittedBox(child: Text(value,         style: TextStyle(color: valueColor), maxLines: 1,)))),
+              Expanded(flex: 3, child: SizedBox(width: width - 10, child: FittedBox(child: Text(value,         style: TextStyle(color: valueColor), maxLines: value.contains("\n") ? 2 : 1, textAlign: TextAlign.center,)))),
             ]),
         ),
       ),
@@ -565,7 +622,7 @@ class InstrumentListState extends State<InstrumentList> {
                     "Available Tiles:\n"
                     "GS  - Ground speed.\n"
                     "ALT - GPS altitude.\n"
-                    "MT  - Magnetic track.\n"
+                    "MT  - Magnetic track. Tap to toggle North Up and Track Up. Olive means Track Up.\n"
                     "PRV - Tap to go to the previous waypoint as shown.\n"
                     "NXT - Tap to go to the next waypoint as shown.\n"
                     "DIS - Distance to the next waypoint.\n"
@@ -579,7 +636,8 @@ class InstrumentListState extends State<InstrumentList> {
                     "UTC - Coordinated Universal Time.\n"
                     "SRC - GPS source. Tap to cycle modes. Green=Internal, Blue=External, otherwise auto switch.\n"
                     "FLT - Total flight time in hours. Tap to reset.\n"
-                    "ADSB- ADS-B receiver status. Shows your tail number when the receiver reports it; otherwise a circle (green \u25cf=connected, yellow \u25cf=connected without GPS, \u25cb=disconnected). Click on the tile to open the status screen.\n",
+                    "ADSB- ADS-B receiver status. Shows your tail number when the receiver reports it; otherwise a circle (green \u25cf=connected, yellow \u25cf=connected without GPS, \u25cb=disconnected). Click on the tile to open the status screen.\n"
+                    "RES - App RSS memory use. First line is current, second is maximum, in MB.\n",
                     null, 30);
                 },
                 child: _menuRow(Icons.help_outline, "Help"),

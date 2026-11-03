@@ -88,6 +88,10 @@ class Storage {
   final rawFixChange = ValueNotifier<GpsFix?>(null);
   // when plate changes
   final plateChange = ValueNotifier<int>(0);
+  // when plate sync switches the airport (route.change also ticks every GPS update)
+  final plateAirportChange = ValueNotifier<int>(0);
+  String _plateSyncWaypointKey = "";
+  int _plateSyncToken = 0;
   /// Ownship map/plate icon image changed ([imagePlane] replaced).
   final planeIconChange = ValueNotifier<int>(0);
   // when destination changes
@@ -97,6 +101,8 @@ class Storage {
   // so traffic map layers rebuild on real changes instead of every second
   final trafficChange = ValueNotifier<int>(0);
   final rubberBandChange = ValueNotifier<int>(0); // when route is changed via rubber band, for testing with GPS
+  // bumped when map orientation flips between north-up and track-up
+  final northUpChange = ValueNotifier<int>(0);
   final warningChange = ValueNotifier<bool>(false);
   final flightStatus = FlightStatus();
   AirportBusiness? business; // currently selected business on the plate diagram
@@ -155,6 +161,13 @@ class Storage {
     hold = pattern;
     holdChange.value++;
   }
+
+  // Flip north-up / track-up and tell the map and instrument tiles.
+  void toggleNorthUp() {
+    settings.setNorthUp(!settings.getNorthUp());
+    northUpChange.value++;
+  }
+
   // Signature of the last active plan persisted to settings. Used to only write
   // to user.db when the plan or its current index actually changes.
   String _lastSavedPlanSignature = "";
@@ -163,7 +176,7 @@ class Storage {
   // waypoint index + airway sub-index) so we can detect changes without
   // re-serializing the whole plan every second.
   String _planSignature() {
-    return "${_route.toString()}|${_route.currentWaypointIndex}|${_route.getCurrentWaypoint()?.currentDestinationIndex ?? 0}";
+    return "${_route.toString()}|${_route.currentWaypointIndex}|${_route.getCurrentWaypoint()?.currentDestinationIndex ?? 0}|${_route.altitudeSignature()}";
   }
 
   // Save the active plan and the waypoint it is on so it can be reloaded after
@@ -574,6 +587,8 @@ class Storage {
     // reload the active plan (and the waypoint it was on) if the app was
     // previously closed or crashed while a plan was active
     await _restoreActivePlan();
+    // snapshot the restored waypoint first so opening the app does not switch plates
+    _listenForPlateSync();
 
     Timer.periodic(const Duration(seconds: 1), (tim) async {
       // send AP data
@@ -718,8 +733,9 @@ class Storage {
 
   Future<void> loadPlate() async {
     String plateAirport = settings.getCurrentPlateAirport();
-    plateAirportDestination = await MainDatabaseHelper.db.findAirport(plateAirport);
-    String path = await PathUtils.getPlatePath(dataDir, plateAirport, currentPlate);
+    String plateName = currentPlate;
+    AirportDestination? airport = await MainDatabaseHelper.db.findAirport(plateAirport);
+    String path = await PathUtils.getPlatePath(dataDir, plateAirport, plateName);
     File file = File(path);
     Completer<ui.Image> completerPlate = Completer();
     Uint8List bytes;
@@ -731,52 +747,128 @@ class Storage {
       // file bad or not found
       bytes = bd.buffer.asUint8List();
     }
-    topLeftPlate = null;
-    bottomRightPlate = null;
-
     ui.decodeImageFromList(bytes, (ui.Image img) {
       return completerPlate.complete(img);
     });
-    ui.Image? image = await completerPlate.future; // double buffering
-    if(imagePlate != null) {
-      imagePlate!.dispose();
-      imagePlate = null;
+    ui.Image image = await completerPlate.future; // double buffering
+    // A newer plate (sync, landing, or a long-press) won while this decoded.
+    if(settings.getCurrentPlateAirport() != plateAirport || currentPlate != plateName) {
+      image.dispose();
+      return;
     }
+    // Read the georeference first and swap everything in one step. Clearing the
+    // old plate before the awaits finished let the map rebuild with no plate in
+    // between, which showed as a flash.
+    List<double>? matrix;
+    LatLng? topLeft;
+    LatLng? bottomRight;
+    try {
+      Map<String, IfdTag> exif = await readExifFromBytes(bytes);
+      IfdTag? tag = exif["EXIF UserComment"];
+      if(null != tag) {
+        List<String> tokens = tag.toString().split("|");
+        if(tokens.length == 4) {
+          matrix = tokens.map(double.parse).toList();
+          double dx = matrix[0];
+          double dy = matrix[1];
+          double lonTopLeft = matrix[2];
+          double latTopLeft = matrix[3];
+          double latBottomRight = latTopLeft + image.height / dy;
+          double lonBottomRight = lonTopLeft + image.width / dx;
+          topLeft = LatLng(latTopLeft, lonTopLeft);
+          bottomRight = LatLng(latBottomRight, lonBottomRight);
+        }
+        else if(tokens.length == 6) { //could be made same as for other plates
+          matrix = tokens.map(double.parse).toList();
+        }
+      }
+    }
+    catch(e) {
+      matrix = null;
+      topLeft = null;
+      bottomRight = null;
+    }
+    // A newer plate won while the exif was read.
+    if(settings.getCurrentPlateAirport() != plateAirport || currentPlate != plateName) {
+      image.dispose();
+      return;
+    }
+
+    final ui.Image? previous = imagePlate;
+    plateAirportDestination = airport;
     imagePlate = image;
-
-    Map<String, IfdTag> exif = await readExifFromBytes(bytes);
-    matrixPlate = null;
-    IfdTag? tag = exif["EXIF UserComment"];
-    if(null != tag) {
-      List<String> tokens = tag.toString().split("|");
-      if(tokens.length == 4) {
-        matrixPlate = [];
-        matrixPlate!.add(double.parse(tokens[0]));
-        matrixPlate!.add(double.parse(tokens[1]));
-        matrixPlate!.add(double.parse(tokens[2]));
-        matrixPlate!.add(double.parse(tokens[3]));
-
-        double dx = matrixPlate![0];
-        double dy = matrixPlate![1];
-        double lonTopLeft = matrixPlate![2];
-        double latTopLeft = matrixPlate![3];
-        double latBottomRight = latTopLeft + image.height / dy;
-        double lonBottomRight = lonTopLeft + image.width / dx;
-        topLeftPlate = LatLng(latTopLeft, lonTopLeft);
-        bottomRightPlate = LatLng(latBottomRight, lonBottomRight);
-      }
-      else if(tokens.length == 6) { //could be made same as for other plates
-        matrixPlate = [];
-        matrixPlate!.add(double.parse(tokens[0]));
-        matrixPlate!.add(double.parse(tokens[1]));
-        matrixPlate!.add(double.parse(tokens[2]));
-        matrixPlate!.add(double.parse(tokens[3]));
-        matrixPlate!.add(double.parse(tokens[4]));
-        matrixPlate!.add(double.parse(tokens[5]));
-      }
-    }
+    matrixPlate = matrix;
+    topLeftPlate = topLeft;
+    bottomRightPlate = bottomRight;
+    previous?.dispose();
 
     plateChange.value++; // change in storage
+  }
+
+  // route.change fires on every GPS update. Remember the active waypoint and
+  // switch plates only when that waypoint itself changes to an airport.
+  void _listenForPlateSync() {
+    _plateSyncWaypointKey = _activePlateWaypointKey();
+    route.change.addListener(_onRouteChangedForPlateSync);
+  }
+
+  String _activePlateWaypointKey() {
+    Waypoint? waypoint = route.getCurrentWaypoint();
+    if(waypoint == null) {
+      return "";
+    }
+    Destination destination = waypoint.destination;
+    return "${waypoint.currentDestinationIndex}|${destination.type}|${destination.locationID}";
+  }
+
+  void _onRouteChangedForPlateSync() {
+    String key = _activePlateWaypointKey();
+    if(key == _plateSyncWaypointKey) {
+      return;
+    }
+    _plateSyncWaypointKey = key;
+    if(!settings.isSyncPlateToActiveWaypoint()) {
+      return;
+    }
+    Destination? destination = route.getCurrentWaypoint()?.destination;
+    if(destination == null || destination.locationID.isEmpty || !Destination.isAirport(destination.type)) {
+      return;
+    }
+    // Long-press Plates, the airport selector, and the plate already on screen
+    // stay put until the active waypoint moves to a different airport.
+    if(settings.getCurrentPlateAirport() == destination.locationID) {
+      return;
+    }
+    int token = ++_plateSyncToken;
+    // same handoff as landing: clear the last airport so the plate screen
+    // loads this airport's first plate (the diagram, when one exists)
+    lastPlateAirport = "";
+    settings.setCurrentPlateAirport(destination.locationID);
+    settings.setPlateProfileVisible(false);
+    settings.setPlateProfile("");
+    plateTransform = Matrix4.identity();
+    if(destination is AirportDestination) {
+      plateAirportDestination = destination;
+    }
+    plateAirportChange.value++;
+    unawaited(_loadSyncedPlate(token, destination.locationID));
+  }
+
+  // Fills in the plate image when the plate screen is not showing. If the
+  // screen, a long-press, or a profile already chose a plate, leave it.
+  Future<void> _loadSyncedPlate(int token, String airportId) async {
+    List<String> plates = await PathUtils.getPlatesAndCSupSorted(dataDir, airportId);
+    if(token != _plateSyncToken) {
+      return;
+    }
+    if(settings.getCurrentPlateAirport() != airportId || lastPlateAirport.isNotEmpty) {
+      return;
+    }
+    currentPlate = plates.isNotEmpty ? plates[0] : "";
+    if(token != _plateSyncToken || settings.getCurrentPlateAirport() != airportId || lastPlateAirport.isNotEmpty) {
+      return;
+    }
+    await loadPlate();
   }
 }
 

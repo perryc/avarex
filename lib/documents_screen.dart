@@ -3,12 +3,15 @@ import 'package:avaremp/utils/toast.dart';
 import 'package:universal_io/io.dart';
 import 'package:avaremp/utils/path_utils.dart';
 import 'package:avaremp/utils/pdf_viewer.dart';
+import 'package:avaremp/utils/zoomable_view.dart';
 import 'package:avaremp/storage.dart';
 import 'package:avaremp/kml_viewer_screen.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show KeyDownEvent, LogicalKeyboardKey;
 import 'package:share_plus/share_plus.dart';
 import 'package:widget_zoom/widget_zoom.dart';
 
@@ -177,13 +180,8 @@ class DocumentsScreenState extends State<DocumentsScreen> {
                       color: Theme.of(context).colorScheme.primaryContainer.withAlpha(100),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Center(
-                      child: Icon(
-                        Icons.folder_rounded,
-                        size: 48,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: _folderPicture(folderName),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -340,6 +338,101 @@ class DocumentsScreenState extends State<DocumentsScreen> {
     }
   }
 
+  /// Cover for a folder the app creates, keyed by the directory name in lower
+  /// case. FAA downloads unzip to AIM, CFR14 (the regulations), Handbooks, ACS,
+  /// and AC. Specialty handbooks unzip into that same Handbooks folder.
+  static const Map<String, String> _folderCovers = {
+    'notes': 'assets/folder_covers/notes.jpg',
+    'tracks': 'assets/folder_covers/tracks.jpg',
+    'aim': 'assets/folder_covers/aim.jpg',
+    'faa aim': 'assets/folder_covers/aim.jpg',
+    'cfr14': 'assets/folder_covers/far.jpg',
+    'far': 'assets/folder_covers/far.jpg',
+    '14 cfr': 'assets/folder_covers/far.jpg',
+    'faa 14 cfr': 'assets/folder_covers/far.jpg',
+    'handbooks': 'assets/pdf_thumbnails/PHAK_Pilots_Handbook_of_Aeronautical_Knowledge.png',
+    'faa handbooks': 'assets/pdf_thumbnails/PHAK_Pilots_Handbook_of_Aeronautical_Knowledge.png',
+    'acs': 'assets/folder_covers/acs.jpg',
+    'faa acs': 'assets/folder_covers/acs.jpg',
+    'ac': 'assets/folder_covers/ac.jpg',
+    'faa ac': 'assets/folder_covers/ac.jpg',
+    'advisory circulars': 'assets/folder_covers/ac.jpg',
+    'faa advisory circulars': 'assets/folder_covers/ac.jpg',
+  };
+
+  static String? _folderCoverAsset(String folderName) {
+    final String key = folderName
+        .trim()
+        .toLowerCase()
+        .replaceAll('_', ' ')
+        .replaceAll(RegExp(r'\s+'), ' ');
+    return _folderCovers[key];
+  }
+
+  /// Fills the folder tile. A folder the user created keeps the folder icon.
+  Widget _folderPicture(String folderName) {
+    final Widget icon = Icon(
+      Icons.folder_rounded,
+      size: 48,
+      color: Theme.of(context).colorScheme.primary,
+    );
+    final String? asset = _folderCoverAsset(folderName);
+    if (asset == null) {
+      return Center(child: icon);
+    }
+    // Expand to the tile. An infinite width and height collapses on a phone.
+    return SizedBox.expand(
+      child: Image.asset(
+        asset,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => Center(child: icon),
+      ),
+    );
+  }
+
+  /// Asset holding the pre-rendered first page of a bundled FAA PDF, named after
+  /// the PDF (see tools/make_faa_thumbnails.sh). Null for anything that is not a PDF.
+  static String? _pdfThumbnailAsset(String url) {
+    if (!PathUtils.isPdfFile(url)) {
+      return null;
+    }
+    final String file = PathUtils.filename(url);
+    return "assets/pdf_thumbnails/${file.substring(0, file.lastIndexOf('.'))}.png";
+  }
+
+  /// Cover for the User Data file tile. This is a file (user.db), not a folder,
+  /// so it stays out of [_folderCovers].
+  static const String _userDataCover = 'assets/folder_covers/user_data.jpg';
+
+  static bool _isUserDataDocument(Document product) {
+    return product.name == 'User Data' ||
+        PathUtils.filename(product.url).toLowerCase() == 'user.db';
+  }
+
+  /// The tile picture of a user document: the User Data cover, the first page
+  /// of a known FAA PDF, otherwise the generic icon for its type.
+  Widget _documentIcon(Document product) {
+    final Widget icon = Icon(
+      getIcon(product).icon,
+      size: 36,
+      color: Theme.of(context).colorScheme.primary,
+    );
+    final String? thumbnail = _isUserDataDocument(product)
+        ? _userDataCover
+        : (Constants.shouldShowPdf ? _pdfThumbnailAsset(product.url) : null);
+    if (thumbnail == null) {
+      return Center(child: icon);
+    }
+    // Fill the tile. An infinite width and height lays out with no area on a phone.
+    return SizedBox.expand(
+      child: Image.asset(
+        thumbnail,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => Center(child: icon),
+      ),
+    );
+  }
+
   IconData _getFilterIcon(String filter) {
     switch (filter) {
       case DocumentsScreen.allDocuments:
@@ -362,6 +455,30 @@ class DocumentsScreenState extends State<DocumentsScreen> {
         }
         return Icons.description;
     }
+  }
+
+  // Open an internet picture full screen. The pictures currently listed (same
+  // filter, same order as the grid) are passed along so the viewer can slide to
+  // the previous / next one without being closed.
+  void _openWebPicture(Document product) {
+    final String filter = Storage().settings.getDocumentPage();
+    final List<Document> pictures = products
+        .where((p) => p.type != DocumentsScreen.userDocuments &&
+            (filter == DocumentsScreen.allDocuments || p.type == filter))
+        .toList();
+    int index = pictures.indexWhere((p) => p.url == product.url);
+    if (index < 0) {
+      pictures
+        ..clear()
+        ..add(product);
+      index = 0;
+    }
+    Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (context) => WebPictureViewer(pictures: pictures, initialIndex: index),
+      ),
+    );
   }
 
   //if you don't want widget full screen then use center widget
@@ -422,28 +539,35 @@ class DocumentsScreenState extends State<DocumentsScreen> {
              color: Theme.of(context).colorScheme.primaryContainer.withAlpha(80),
              borderRadius: BorderRadius.circular(8),
            ),
-           child: Center(
-             child: Icon(
-               getIcon(product).icon,
-               size: 36,
-               color: Theme.of(context).colorScheme.primary,
-             ),
-           ),
+           clipBehavior: Clip.antiAlias,
+           child: _documentIcon(product),
          ), product));
      }
      else {
-       // pictures
-       widget = WidgetZoom(
-           heroAnimationTag: product.name,
-           zoomWidget: CachedNetworkImage(
-             imageUrl: product.url,
-             cacheManager: FileCacheManager().documentsCacheManager,));
+       // pictures from the internet (WPC, SigWx, ...). Tap opens a full screen viewer
+       // where swiping slides to the previous / next picture.
+       widget = GestureDetector(
+           onTap: () => _openWebPicture(product),
+           child: SizedBox.expand(
+             child: CachedNetworkImage(
+               imageUrl: product.url,
+               fit: BoxFit.contain,
+               cacheManager: FileCacheManager().documentsCacheManager,
+               errorWidget: (context, url, error) => Icon(
+                 Icons.broken_image,
+                 color: Theme.of(context).colorScheme.primary,
+               ),
+             ),
+           ));
      }
 
      // local picture files. deal with zoom widget
      if(PathUtils.isPictureFile(product.url) && product.type == DocumentsScreen.userDocuments) {
        // pictures
-       widget = _makeActions(WidgetZoom(heroAnimationTag: product.name, zoomWidget: Image.file(File(product.url))), product);
+       widget = _makeActions(WidgetZoom(
+         heroAnimationTag: product.name,
+         zoomWidget: Image.file(File(product.url), fit: BoxFit.contain),
+       ), product);
      }
 
      return Padding(
@@ -569,15 +693,20 @@ class DocumentsScreenState extends State<DocumentsScreen> {
       products.addAll(productsStatic);
     }
 
+    // User documents, with "User Data" (user.db) among them, sorted by name.
+    final List<Document> userDocs = [
+      for(String doc in docs)
+        Document(DocumentsScreen.userDocuments, PathUtils.filename(doc), doc),
+    ];
     if (!_isInSubfolder) {
-      Document db = Document(DocumentsScreen.userDocuments, "User Data",
-          PathUtils.getFilePath(Storage().dataDir, "user.db"));
-      products.add(db);
+      userDocs.add(Document(DocumentsScreen.userDocuments, "User Data",
+          PathUtils.getFilePath(Storage().dataDir, "user.db")));
     }
-
-    for(String doc in docs) {
-      products.add(Document(DocumentsScreen.userDocuments, PathUtils.filename(doc), doc));
-    }
+    userDocs.sort((a, b) {
+      final int byName = a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      return byName != 0 ? byName : a.url.compareTo(b.url);
+    });
+    products.addAll(userDocs);
 
     List<String> ctypes = products.map((e) => e.type).toSet().toList();
     ctypes.insert(0, DocumentsScreen.allDocuments);
@@ -723,6 +852,144 @@ class Document {
   final String url;
   final String type;
   Document(this.type, this.name, this.url);
+}
+
+/// Full screen, zoomable viewer for the internet pictures (WPC, SigWx, ...).
+/// Swipe left / right (slide animation) to go to the next / previous picture
+/// without closing the viewer. While a picture is zoomed in, dragging pans the
+/// picture instead; zoom back out to swipe again.
+class WebPictureViewer extends StatefulWidget {
+  final List<Document> pictures;
+  final int initialIndex;
+
+  const WebPictureViewer({super.key, required this.pictures, this.initialIndex = 0});
+
+  @override
+  State<WebPictureViewer> createState() => _WebPictureViewerState();
+}
+
+class _WebPictureViewerState extends State<WebPictureViewer> {
+  late int _index = widget.initialIndex.clamp(0, widget.pictures.length - 1);
+  late final PageController _controller = PageController(initialPage: _index);
+  final FocusNode _focusNode = FocusNode();
+  bool _zoomed = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _slideTo(int page) {
+    if (page < 0 || page >= widget.pictures.length || _zoomed) {
+      return;
+    }
+    _controller.animateToPage(
+      page,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (event is KeyDownEvent) {
+      if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+        _slideTo(_index - 1);
+        return KeyEventResult.handled;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+        _slideTo(_index + 1);
+        return KeyEventResult.handled;
+      }
+    }
+    return KeyEventResult.ignored;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Constants.appBarBackgroundColor,
+        title: Text(
+          widget.pictures[_index].name,
+          style: const TextStyle(fontSize: 16),
+          overflow: TextOverflow.ellipsis,
+        ),
+        actions: [
+          if (widget.pictures.length > 1)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Center(child: Text("${_index + 1} / ${widget.pictures.length}")),
+            ),
+        ],
+      ),
+      body: Focus(
+        autofocus: true,
+        focusNode: _focusNode,
+        onKeyEvent: _onKey,
+        child: ScrollConfiguration(
+          // allow mouse / trackpad dragging on desktop too
+          behavior: ScrollConfiguration.of(context).copyWith(
+            dragDevices: {
+              PointerDeviceKind.touch,
+              PointerDeviceKind.mouse,
+              PointerDeviceKind.trackpad,
+              PointerDeviceKind.stylus,
+            },
+          ),
+          child: PageView.builder(
+            controller: _controller,
+            itemCount: widget.pictures.length,
+            // when zoomed, drags pan the picture rather than change the page
+            physics: _zoomed ? const NeverScrollableScrollPhysics() : const PageScrollPhysics(),
+            onPageChanged: (int page) {
+              setState(() {
+                _index = page;
+                _zoomed = false;
+              });
+            },
+            itemBuilder: (context, i) => _ZoomableWebPicture(
+              key: ValueKey(widget.pictures[i].url),
+              url: widget.pictures[i].url,
+              onLockChanged: (bool locked) {
+                if (i == _index && locked != _zoomed) {
+                  setState(() {
+                    _zoomed = locked;
+                  });
+                }
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ZoomableWebPicture extends StatelessWidget {
+  final String url;
+  final ValueChanged<bool> onLockChanged;
+
+  const _ZoomableWebPicture({super.key, required this.url, required this.onLockChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return ZoomableView(
+      onLockChanged: onLockChanged,
+      child: Center(
+        child: CachedNetworkImage(
+          imageUrl: url,
+          cacheManager: FileCacheManager().documentsCacheManager,
+          fit: BoxFit.contain,
+          placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
+          errorWidget: (context, url, error) =>
+              const Icon(Icons.broken_image, color: Colors.white54, size: 64),
+        ),
+      ),
+    );
+  }
 }
 
 

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:avaremp/place/airspace_3d_view.dart';
 import 'package:avaremp/place/airspace_volume.dart';
+import 'package:avaremp/weather/tfr.dart';
 import 'package:avaremp/utils/mbtiles_layer.dart';
 import 'package:mbtiles/mbtiles.dart';
 import 'package:vector_tile/vector_tile.dart';
@@ -37,12 +38,18 @@ List<String> _tileSeamWalls(AirspaceScene scene, LatLng center) {
         final lat = center.latitude + ((a.n + b.n) / 2) / 60;
         final yArg = lat * math.pi / 180;
         final x = (lon + 180) / 360 * 1024;
-        final y = (1 - math.log(math.tan(yArg) + 1 / math.cos(yArg)) / math.pi) / 2 * 1024;
-        final onTile = vertical ? (x - x.round()).abs() < 0.002 : (y - y.round()).abs() < 0.002;
+        final y =
+            (1 - math.log(math.tan(yArg) + 1 / math.cos(yArg)) / math.pi) /
+                2 *
+                1024;
+        final onTile = vertical
+            ? (x - x.round()).abs() < 0.002
+            : (y - y.round()).abs() < 0.002;
         if (!onTile) {
           continue;
         }
-        walls.add('${shelf.label} (${a.e.toStringAsFixed(2)},${a.n.toStringAsFixed(2)})->(${b.e.toStringAsFixed(2)},${b.n.toStringAsFixed(2)})');
+        walls.add(
+            '${shelf.label} (${a.e.toStringAsFixed(2)},${a.n.toStringAsFixed(2)})->(${b.e.toStringAsFixed(2)},${b.n.toStringAsFixed(2)})');
       }
     }
   }
@@ -61,7 +68,8 @@ void main() {
     expect(AirspaceShelf.altitudeRange(500, 5000), '05-50');
   });
 
-  test('vector map labels use hundreds of feet and the airport at the center', () {
+  test('vector map labels use hundreds of feet and the airport at the center',
+      () {
     expect(
       vectorAirspaceLabel({
         'CLASS': 'C',
@@ -115,7 +123,8 @@ void main() {
       }, sua: true),
       'R-4101A SF-25',
     );
-    expect(vectorAirspaceLabel({'CLASS': 'C', 'EXCLUSION': '1'}, sua: false), isNull);
+    expect(vectorAirspaceLabel({'CLASS': 'C', 'EXCLUSION': '1'}, sua: false),
+        isNull);
     expect(MBTilesLayerManager.debugThemeLayerCount(), 18);
     final spread = airspaceLabelGrid([
       [
@@ -126,7 +135,210 @@ void main() {
       ],
     ], 4096);
     expect(spread.length, greaterThan(4));
-    expect(spread.every((point) => point[0] > 150 && point[0] < 3950 && point[1] > 150 && point[1] < 3950), isTrue);
+    expect(
+        spread.every((point) =>
+            point[0] > 150 &&
+            point[0] < 3950 &&
+            point[1] > 150 &&
+            point[1] < 3950),
+        isTrue);
+  });
+
+  test('airport diagrams sit on the runway ends inside 25 NM', () {
+    const center = LatLng(42.0, -71.0);
+    final diagrams = airportDiagramsInView(
+      [
+        {
+          'LocationID': 'MHT',
+          'DLID': '1',
+          'ARPLatitude': 42.0,
+          'ARPLongitude': -71.0,
+          'Type': 'AIRPORT',
+        },
+        {
+          'LocationID': 'FAR',
+          'DLID': '2',
+          'ARPLatitude': 43.0,
+          'ARPLongitude': -71.0,
+          'Type': 'AIRPORT',
+        },
+        {
+          'LocationID': 'H1',
+          'DLID': '3',
+          'ARPLatitude': 42.01,
+          'ARPLongitude': -71.0,
+          'Type': 'HELIPORT',
+        },
+      ],
+      [
+        {
+          'DLID': '1',
+          'LEIdent': '35',
+          'HEIdent': '17',
+          'LELatitude': 42.0 + 0.5 / 60,
+          'HELatitude': 42.0 - 0.5 / 60,
+          'LELongitude': -71.0,
+          'HELongitude': -71.0,
+          'Length': '6076',
+          'Width': '150',
+          'Surface': 'ASPH-G',
+        },
+        {
+          'DLID': '2',
+          'LEIdent': '18',
+          'HEIdent': '36',
+          'LELatitude': 43.0,
+          'HELatitude': 43.01,
+          'LELongitude': -71.0,
+          'HELongitude': -71.0,
+          'Length': '5000',
+          'Width': '100',
+          'Surface': 'CONC',
+        },
+      ],
+      center: center,
+    );
+    expect(diagrams, hasLength(1));
+    expect(diagrams.single.ident, 'MHT');
+    expect(diagrams.single.at.e, closeTo(0, 0.02));
+    expect(diagrams.single.at.n, closeTo(0, 0.02));
+    final runway = diagrams.single.runways.single;
+    expect(runway.low.n, closeTo(0.5, 0.02));
+    expect(runway.high.n, closeTo(-0.5, 0.02));
+    expect(runway.low.e.abs(), lessThan(0.02));
+    expect(runway.widthFt, 150);
+    expect(runway.surface, 'ASPH-G');
+    expect(runway.lowIdent, '35');
+    expect(runway.highIdent, '17');
+  });
+
+  test('a single runway without ends is placed from its length and heading', () {
+    const center = LatLng(42.0, -71.0);
+    final diagrams = airportDiagramsInView(
+      [
+        {
+          'LocationID': '1B9',
+          'DLID': '9',
+          'ARPLatitude': 42.0,
+          'ARPLongitude': -71.0,
+        },
+      ],
+      [
+        {
+          'DLID': '9',
+          'LEIdent': '36',
+          'HEIdent': '18',
+          'LELatitude': 0,
+          'HELatitude': 0,
+          'LELongitude': 0,
+          'HELongitude': 0,
+          'Length': '6076',
+          'Width': '',
+          'Surface': 'TURF',
+          'LEHeadingT': '360',
+        },
+      ],
+      center: center,
+    );
+    expect(diagrams, hasLength(1));
+    final runway = diagrams.single.runways.single;
+    expect(runway.low.n, closeTo(-0.5, 0.02));
+    expect(runway.high.n, closeTo(0.5, 0.02));
+    expect(runway.low.e.abs(), lessThan(0.02));
+    expect(runway.widthFt, 50);
+    expect(runway.surface, 'TURF');
+
+    final fromIdent = airportDiagramsInView(
+      [
+        {
+          'LocationID': '1B9',
+          'DLID': '9',
+          'ARPLatitude': 42.0,
+          'ARPLongitude': -71.0,
+        },
+      ],
+      [
+        {
+          'DLID': '9',
+          'LEIdent': '09',
+          'HEIdent': '27',
+          'LELatitude': '0',
+          'HELatitude': '0',
+          'LELongitude': '0',
+          'HELongitude': '0',
+          'Length': '6076',
+        },
+      ],
+      center: center,
+    );
+    final east = fromIdent.single.runways.single;
+    expect(east.low.e, closeTo(-0.5, 0.02));
+    expect(east.high.e, closeTo(0.5, 0.02));
+    expect(east.low.n.abs(), lessThan(0.02));
+  });
+
+  test('several runways with no ends are left off the diagram', () {
+    const center = LatLng(42.0, -71.0);
+    final diagrams = airportDiagramsInView(
+      [
+        {
+          'LocationID': 'PVT',
+          'DLID': '4',
+          'ARPLatitude': 42.0,
+          'ARPLongitude': -71.0,
+          'Type': 'AIRPORT',
+        },
+      ],
+      [
+        {
+          'DLID': '4',
+          'LEIdent': '18',
+          'HEIdent': '36',
+          'LELatitude': 0,
+          'HELatitude': 0,
+          'LELongitude': 0,
+          'HELongitude': 0,
+          'Length': '3000',
+        },
+        {
+          'DLID': '4',
+          'LEIdent': '09',
+          'HEIdent': '27',
+          'LELatitude': 0,
+          'HELatitude': 0,
+          'LELongitude': 0,
+          'HELongitude': 0,
+          'Length': '2500',
+        },
+      ],
+      center: center,
+    );
+    expect(diagrams, isEmpty);
+    final scene = AirspaceScene(
+      radiusNm: airspaceViewRadiusNm,
+      shelves: const [],
+      diagrams: [
+        AirspaceDiagram(
+          ident: 'MHT',
+          at: const NmPoint(1, 2),
+          runways: [
+            AirspaceRunway(
+              low: const NmPoint(1, 1),
+              high: const NmPoint(1, 3),
+              widthFt: 150,
+              surface: 'ASPH',
+              lowIdent: '17',
+              highIdent: '35',
+            ),
+          ],
+        ),
+      ],
+    );
+    final next = scene.copyWith(
+      obstacles: [AirspaceObstacle(e: 0, n: 0, heightFt: 500)],
+    );
+    expect(next.diagrams, same(scene.diagrams));
+    expect(next.obstacles, hasLength(1));
   });
 
   test('obstacles inside 25 NM keep their MSL height in hundreds of feet', () {
@@ -212,7 +424,10 @@ void main() {
       NmPoint(20, 5),
       NmPoint(-5, 5),
     ], 10);
-    expect(crossing.every((p) => p.e <= 10 && p.e >= -10 && p.n <= 10 && p.n >= -10), isTrue);
+    expect(
+        crossing
+            .every((p) => p.e <= 10 && p.e >= -10 && p.n <= 10 && p.n >= -10),
+        isTrue);
     expect(polygonContains([crossing], 0, 0), isTrue);
     expect(polygonContains([crossing], 12, 0), isFalse);
 
@@ -222,7 +437,9 @@ void main() {
       NmPoint(12, 8),
       NmPoint(-5, 8),
     ], 0, 0, 10, 10);
-    expect(buffered.every((p) => p.e >= 0 && p.e <= 10 && p.n >= 0 && p.n <= 10), isTrue);
+    expect(
+        buffered.every((p) => p.e >= 0 && p.e <= 10 && p.n >= 0 && p.n <= 10),
+        isTrue);
     expect(buffered.any((p) => p.e == 0), isTrue);
     expect(buffered.any((p) => p.e == 10), isTrue);
   });
@@ -261,15 +478,26 @@ void main() {
         airports: const [jfk, ewr, lga],
         placeNamesAtAirports: true,
       );
-      AirspaceMapLabel named(String ident) => labels.firstWhere((label) => label.text.startsWith(ident));
-      expect(_km(named('KJFK').point, jfk.latitude, jfk.longitude), lessThan(1));
-      expect(_km(named('KEWR').point, ewr.latitude, ewr.longitude), lessThan(1));
-      expect(_km(named('KLGA').point, lga.latitude, lga.longitude), lessThan(1));
-      expect(labels.any((label) => label.text.startsWith('KJFK') && _km(label.point, ewr.latitude, ewr.longitude) < 5), isFalse);
+      AirspaceMapLabel named(String ident) =>
+          labels.firstWhere((label) => label.text.startsWith(ident));
+      expect(
+          _km(named('KJFK').point, jfk.latitude, jfk.longitude), lessThan(1));
+      expect(
+          _km(named('KEWR').point, ewr.latitude, ewr.longitude), lessThan(1));
+      expect(
+          _km(named('KLGA').point, lga.latitude, lga.longitude), lessThan(1));
+      expect(
+          labels.any((label) =>
+              label.text.startsWith('KJFK') &&
+              _km(label.point, ewr.latitude, ewr.longitude) < 5),
+          isFalse);
     } finally {
       db.dispose();
     }
-  }, skip: mbtiles == null || mbtiles.isEmpty ? 'Set AVAREX_NASR_MBTILES to the nasr.mbtiles path' : false);
+  },
+      skip: mbtiles == null || mbtiles.isEmpty
+          ? 'Set AVAREX_NASR_MBTILES to the nasr.mbtiles path'
+          : false);
 
   test('zoomed-out labels stay on the airspace instead of the camera', () {
     final db = MbTiles(mbtilesPath: mbtiles!);
@@ -291,7 +519,12 @@ void main() {
       for (final label in named) {
         expect(_km(label.point, lat, lon), lessThan(50));
       }
-      expect(wide.any((label) => label.text.contains('20-70') || label.text.contains('30-70') || label.text.contains('KORH')), isFalse);
+      expect(
+          wide.any((label) =>
+              label.text.contains('20-70') ||
+              label.text.contains('30-70') ||
+              label.text.contains('KORH')),
+          isFalse);
       expect(wide.length, lessThan(41));
 
       const farLon = lon - 3;
@@ -304,11 +537,18 @@ void main() {
         centerLon: farLon,
         tileZoom: 6,
       );
-      expect(elsewhere.any((label) => _km(label.point, lat, farLon) < 30 && label.text.contains('KBOS')), isFalse);
+      expect(
+          elsewhere.any((label) =>
+              _km(label.point, lat, farLon) < 30 &&
+              label.text.contains('KBOS')),
+          isFalse);
     } finally {
       db.dispose();
     }
-  }, skip: mbtiles == null || mbtiles.isEmpty ? 'Set AVAREX_NASR_MBTILES to the nasr.mbtiles path' : false);
+  },
+      skip: mbtiles == null || mbtiles.isEmpty
+          ? 'Set AVAREX_NASR_MBTILES to the nasr.mbtiles path'
+          : false);
 
   test('KBOS labels stay visible when the airport is on a tile edge', () {
     final db = MbTiles(mbtilesPath: mbtiles!);
@@ -338,11 +578,17 @@ void main() {
         tileZoom: 10,
       );
       expect(zoomedIn.any((label) => label.text.contains('SF-70')), isTrue);
-      expect(zoomedIn.any((label) => label.text.contains('20-70') || label.text.contains('30-70')), isFalse);
+      expect(
+          zoomedIn.any((label) =>
+              label.text.contains('20-70') || label.text.contains('30-70')),
+          isFalse);
     } finally {
       db.dispose();
     }
-  }, skip: mbtiles == null || mbtiles.isEmpty ? 'Set AVAREX_NASR_MBTILES to the nasr.mbtiles path' : false);
+  },
+      skip: mbtiles == null || mbtiles.isEmpty
+          ? 'Set AVAREX_NASR_MBTILES to the nasr.mbtiles path'
+          : false);
 
   test('Manchester vector tiles label each sector and the airport center', () {
     final db = MbTiles(mbtilesPath: mbtiles!);
@@ -352,7 +598,8 @@ void main() {
       const y = 376;
       final bytes = db.getTile(z: z, x: x, y: (1 << z) - 1 - y);
       expect(bytes, isNotNull);
-      final tile = VectorTile.fromBytes(bytes: annotateVectorAirspaceLabels(bytes!));
+      final tile =
+          VectorTile.fromBytes(bytes: annotateVectorAirspaceLabels(bytes!));
       final labels = <String>[];
       for (final layer in tile.layers) {
         if (layer.name != 'class_airspace_labels') {
@@ -367,41 +614,64 @@ void main() {
       }
       expect(labels.where((label) => label == '25-43').length, greaterThan(1));
       expect(labels, contains('20-43'));
-      expect(labels.where((label) => label.startsWith('KMHT')), ['KMHT\nSF-43']);
+      expect(
+          labels.where((label) => label.startsWith('KMHT')), ['KMHT\nSF-43']);
       expect(labels.any((label) => label.contains('MANCHESTER')), isFalse);
     } finally {
       db.dispose();
     }
-  }, skip: mbtiles == null || mbtiles.isEmpty ? 'Set AVAREX_NASR_MBTILES to the nasr.mbtiles path' : false);
+  },
+      skip: mbtiles == null || mbtiles.isEmpty
+          ? 'Set AVAREX_NASR_MBTILES to the nasr.mbtiles path'
+          : false);
 
   test('Manchester obstacles are read from the main database', () async {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
-    final obstacles = await loadObstacles(mainDb!, const LatLng(42.9328, -71.4357));
+    final obstacles =
+        await loadObstacles(mainDb!, const LatLng(42.9328, -71.4357));
     expect(obstacles, isNotEmpty);
-    expect(obstacles.every((obstacle) => obstacle.e.abs() <= 25 && obstacle.n.abs() <= 25), isTrue);
-    expect(obstacles.every((obstacle) => obstacle.label == AirspaceShelf.altitudeHundreds(obstacle.heightFt)), isTrue);
-    final tallest = obstacles.reduce((a, b) => a.heightFt >= b.heightFt ? a : b);
+    expect(
+        obstacles.every(
+            (obstacle) => obstacle.e.abs() <= 25 && obstacle.n.abs() <= 25),
+        isTrue);
+    expect(
+        obstacles.every((obstacle) =>
+            obstacle.label ==
+            AirspaceShelf.altitudeHundreds(obstacle.heightFt)),
+        isTrue);
+    final tallest =
+        obstacles.reduce((a, b) => a.heightFt >= b.heightFt ? a : b);
     expect(tallest.heightFt, 1548);
     expect(tallest.label, '15');
     expect(tallest.n, greaterThan(0));
     expect(tallest.e, greaterThan(0));
-  }, skip: mainDb == null || mainDb.isEmpty ? 'Set AVAREX_MAIN_DB to the main.db path' : false);
+  },
+      skip: mainDb == null || mainDb.isEmpty
+          ? 'Set AVAREX_MAIN_DB to the main.db path'
+          : false);
   test('Atlanta Class B is read from the vector map', () {
     final scene = loadClassAirspace(mbtiles!, const LatLng(33.6407, -84.4277));
     expect(scene.message, isNull, reason: scene.message);
     expect(scene.shelves, isNotEmpty);
     final here = scene.shelvesAtCenter.map((s) => s.label).join(', ');
     expect(
-      scene.shelvesAtCenter.any((s) => s.airspaceClass == 'B' && s.floorFt == 0 && s.ceilingFt == 12500),
+      scene.shelvesAtCenter.any((s) =>
+          s.airspaceClass == 'B' && s.floorFt == 0 && s.ceilingFt == 12500),
       isTrue,
       reason: here,
     );
     expect(
-      scene.shelves.every((s) => s.airspaceClass == 'B' || s.airspaceClass == 'C' || s.airspaceClass == 'D'),
+      scene.shelves.every((s) =>
+          s.airspaceClass == 'B' ||
+          s.airspaceClass == 'C' ||
+          s.airspaceClass == 'D'),
       isTrue,
     );
-  }, skip: mbtiles == null || mbtiles.isEmpty ? 'Set AVAREX_NASR_MBTILES to the nasr.mbtiles path' : false);
+  },
+      skip: mbtiles == null || mbtiles.isEmpty
+          ? 'Set AVAREX_NASR_MBTILES to the nasr.mbtiles path'
+          : false);
 
   test('Worcester Class D does not keep the tile-buffer column', () {
     final scene = loadClassAirspace(mbtiles!, const LatLng(42.2673, -71.8757));
@@ -409,7 +679,9 @@ void main() {
     final visibleCuts = <double>[];
     final hiddenCuts = <double>[];
     for (final shelf in scene.shelves) {
-      if (shelf.airspaceClass != 'D' || shelf.floorFt != 0 || shelf.ceilingFt != 3500) {
+      if (shelf.airspaceClass != 'D' ||
+          shelf.floorFt != 0 ||
+          shelf.ceilingFt != 3500) {
         continue;
       }
       for (final ring in shelf.rings) {
@@ -429,7 +701,10 @@ void main() {
       }
     }
     expect(visibleCuts, isEmpty, reason: 'visible chords at $visibleCuts');
-  }, skip: mbtiles == null || mbtiles.isEmpty ? 'Set AVAREX_NASR_MBTILES to the nasr.mbtiles path' : false);
+  },
+      skip: mbtiles == null || mbtiles.isEmpty
+          ? 'Set AVAREX_NASR_MBTILES to the nasr.mbtiles path'
+          : false);
 
   test('tile seams stay hidden when the click point changes', () {
     const kpvd = LatLng(41.7240, -71.4283);
@@ -439,29 +714,46 @@ void main() {
       final scene = loadClassAirspace(mbtiles!, center);
       expect(scene.message, isNull, reason: scene.message);
       final walls = _tileSeamWalls(scene, center);
-      expect(walls, isEmpty, reason: '${center.latitude},${center.longitude}: ${walls.join("; ")}');
+      expect(walls, isEmpty,
+          reason:
+              '${center.latitude},${center.longitude}: ${walls.join("; ")}');
     }
     final providence = loadClassAirspace(mbtiles!, kpvd);
-    final lowShelves = providence.shelves.where((s) => s.airspaceClass == 'C' && s.floorFt == 1300 && s.ceilingFt == 4100);
+    final lowShelves = providence.shelves.where((s) =>
+        s.airspaceClass == 'C' && s.floorFt == 1300 && s.ceilingFt == 4100);
     expect(lowShelves.length, 1);
     expect(lowShelves.first.area, greaterThan(50));
-    expect(lowShelves.first.rings.any((ring) => ring.points.length <= 4), isFalse);
-  }, skip: mbtiles == null || mbtiles.isEmpty ? 'Set AVAREX_NASR_MBTILES to the nasr.mbtiles path' : false);
+    expect(
+        lowShelves.first.rings.any((ring) => ring.points.length <= 4), isFalse);
+  },
+      skip: mbtiles == null || mbtiles.isEmpty
+          ? 'Set AVAREX_NASR_MBTILES to the nasr.mbtiles path'
+          : false);
 
-  test('Camp Edwards restricted area and a nearby warning area are included', () {
+  test('Camp Edwards restricted area and a nearby warning area are included',
+      () {
     final edwards = loadClassAirspace(mbtiles!, const LatLng(41.68, -70.55));
     expect(edwards.message, isNull, reason: edwards.message);
-    final restricted = edwards.shelves.where((shelf) => shelf.airspaceClass == 'RESTRICTED').toList();
+    final restricted = edwards.shelves
+        .where((shelf) => shelf.airspaceClass == 'RESTRICTED')
+        .toList();
     expect(restricted, isNotEmpty);
     expect(restricted.map((shelf) => shelf.label), contains('R-4101A SF-25'));
     expect(edwards.airports.any((mark) => mark.ident == 'R-4101A'), isFalse);
-    expect(edwards.shelves.where((shelf) => shelf.airspaceClass == 'WARNING'), isEmpty);
+    expect(edwards.shelves.where((shelf) => shelf.airspaceClass == 'WARNING'),
+        isEmpty);
 
-    final narragansett = loadClassAirspace(mbtiles, const LatLng(41.10, -71.20));
+    final narragansett =
+        loadClassAirspace(mbtiles, const LatLng(41.10, -71.20));
     expect(narragansett.message, isNull, reason: narragansett.message);
-    final warning = narragansett.shelves.where((shelf) => shelf.airspaceClass == 'WARNING').toList();
+    final warning = narragansett.shelves
+        .where((shelf) => shelf.airspaceClass == 'WARNING')
+        .toList();
     expect(warning.map((shelf) => shelf.label), contains('W-105A SF-500'));
-  }, skip: mbtiles == null || mbtiles.isEmpty ? 'Set AVAREX_NASR_MBTILES to the nasr.mbtiles path' : false);
+  },
+      skip: mbtiles == null || mbtiles.isEmpty
+          ? 'Set AVAREX_NASR_MBTILES to the nasr.mbtiles path'
+          : false);
 
   test('Washington prohibited area and a MOA are included', () {
     final scene = loadClassAirspace(mbtiles!, const LatLng(38.8977, -77.0365));
@@ -469,28 +761,50 @@ void main() {
     final labels = scene.shelves.map((shelf) => shelf.label).toList();
     expect(labels, contains('P-56A SF-180'));
     expect(labels, contains('DEMO 1 05-50'));
-    expect(scene.shelves.any((shelf) => shelf.airspaceClass == 'PROHIBITED' && shelf.ident == 'P-56A'), isTrue);
-    expect(scene.shelves.any((shelf) => shelf.airspaceClass == 'MOA' && shelf.ident == 'DEMO 1'), isTrue);
-    expect(scene.airports.any((mark) => mark.ident == 'P-56A' || mark.ident == 'DEMO 1'), isFalse);
-  }, skip: mbtiles == null || mbtiles.isEmpty ? 'Set AVAREX_NASR_MBTILES to the nasr.mbtiles path' : false);
+    expect(
+        scene.shelves.any((shelf) =>
+            shelf.airspaceClass == 'PROHIBITED' && shelf.ident == 'P-56A'),
+        isTrue);
+    expect(
+        scene.shelves.any(
+            (shelf) => shelf.airspaceClass == 'MOA' && shelf.ident == 'DEMO 1'),
+        isTrue);
+    expect(
+        scene.airports
+            .any((mark) => mark.ident == 'P-56A' || mark.ident == 'DEMO 1'),
+        isFalse);
+  },
+      skip: mbtiles == null || mbtiles.isEmpty
+          ? 'Set AVAREX_NASR_MBTILES to the nasr.mbtiles path'
+          : false);
 
   test('R-5203 is clipped at 10,000 ft so it does not cover KROC', () {
     final scene = loadClassAirspace(mbtiles!, const LatLng(43.1189, -77.6724));
     expect(scene.message, isNull, reason: scene.message);
     expect(scene.maxAltitudeFt, lessThanOrEqualTo(airspaceDisplayCapFt));
-    final restricted = scene.shelves.where((shelf) => shelf.ident == 'R-5203').toList();
+    final restricted =
+        scene.shelves.where((shelf) => shelf.ident == 'R-5203').toList();
     expect(restricted, isNotEmpty);
     expect(restricted.first.ceilingFt, greaterThan(airspaceDisplayCapFt));
     expect(restricted.first.label, 'R-5203 SF-500');
-    expect(scene.shelves.any((shelf) => shelf.ident == 'KROC' && shelf.ceilingFt == 4600), isTrue);
+    expect(
+        scene.shelves
+            .any((shelf) => shelf.ident == 'KROC' && shelf.ceilingFt == 4600),
+        isTrue);
     expect(scene.airports.any((mark) => mark.ident == 'KROC'), isTrue);
     expect(scene.airports.any((mark) => mark.ident == 'R-5203'), isFalse);
-  }, skip: mbtiles == null || mbtiles.isEmpty ? 'Set AVAREX_NASR_MBTILES to the nasr.mbtiles path' : false);
+  },
+      skip: mbtiles == null || mbtiles.isEmpty
+          ? 'Set AVAREX_NASR_MBTILES to the nasr.mbtiles path'
+          : false);
 
   test('Manchester Class C labels use hundreds of feet', () {
     final scene = loadClassAirspace(mbtiles!, const LatLng(42.9328, -71.4357));
     expect(scene.message, isNull, reason: scene.message);
-    final lines = scene.shelves.where((shelf) => shelf.ident == 'KMHT').map((shelf) => shelf.label).toList();
+    final lines = scene.shelves
+        .where((shelf) => shelf.ident == 'KMHT')
+        .map((shelf) => shelf.label)
+        .toList();
     expect(lines, contains('25-43'));
     expect(lines, contains('SF-43'));
     expect(lines.any((text) => text.contains('KMHT')), isFalse);
@@ -498,8 +812,16 @@ void main() {
     expect(airport.airspaceClass, 'C');
     expect(airport.e.abs(), lessThan(3));
     expect(airport.n.abs(), lessThan(3));
-    expect(scene.airports.every((mark) => mark.airspaceClass == 'B' || mark.airspaceClass == 'C' || mark.airspaceClass == 'D'), isTrue);
-  }, skip: mbtiles == null || mbtiles.isEmpty ? 'Set AVAREX_NASR_MBTILES to the nasr.mbtiles path' : false);
+    expect(
+        scene.airports.every((mark) =>
+            mark.airspaceClass == 'B' ||
+            mark.airspaceClass == 'C' ||
+            mark.airspaceClass == 'D'),
+        isTrue);
+  },
+      skip: mbtiles == null || mbtiles.isEmpty
+          ? 'Set AVAREX_NASR_MBTILES to the nasr.mbtiles path'
+          : false);
 
   test('Providence Class C does not draw the tile-edge wedge', () {
     final scene = loadClassAirspace(mbtiles!, const LatLng(41.7240, -71.4283));
@@ -507,7 +829,9 @@ void main() {
     final wedges = <String>[];
     var shelfArea = 0.0;
     for (final shelf in scene.shelves) {
-      if (shelf.airspaceClass != 'C' || shelf.floorFt != 1300 || shelf.ceilingFt != 4100) {
+      if (shelf.airspaceClass != 'C' ||
+          shelf.floorFt != 1300 ||
+          shelf.ceilingFt != 4100) {
         continue;
       }
       shelfArea += shelf.area;
@@ -521,14 +845,18 @@ void main() {
           final de = (a.e - b.e).abs();
           final dn = (a.n - b.n).abs();
           if (dn > 4 && de < 0.15) {
-            wedges.add('(${a.e.toStringAsFixed(2)},${a.n.toStringAsFixed(2)})->(${b.e.toStringAsFixed(2)},${b.n.toStringAsFixed(2)})');
+            wedges.add(
+                '(${a.e.toStringAsFixed(2)},${a.n.toStringAsFixed(2)})->(${b.e.toStringAsFixed(2)},${b.n.toStringAsFixed(2)})');
           }
         }
       }
     }
     expect(shelfArea, greaterThan(20));
     expect(wedges, isEmpty, reason: wedges.join('; '));
-  }, skip: mbtiles == null || mbtiles.isEmpty ? 'Set AVAREX_NASR_MBTILES to the nasr.mbtiles path' : false);
+  },
+      skip: mbtiles == null || mbtiles.isEmpty
+          ? 'Set AVAREX_NASR_MBTILES to the nasr.mbtiles path'
+          : false);
 
   Position _fix(double lat, double lon) {
     return Position(
@@ -546,13 +874,62 @@ void main() {
   }
 
   test('TFR altitudes and the glide ring', () {
-    expect(parseTfrAltitude('SFC')?.$1, 0);
-    expect(parseTfrAltitude('050')?.$1, 5000);
-    expect(parseTfrAltitude('3000')?.$1, 3000);
-    expect(parseTfrAltitude('UNL')?.$2, isTrue);
-    expect(parseTfrAltitude('Check NOTAMs'), isNull);
+    expect(parseTfrLevel('SFC')?.feet, 0);
+    expect(parseTfrLevel('SFC')?.agl, isTrue);
+    expect(parseTfrLevel('050')?.feet, 5000);
+    expect(parseTfrLevel('050')?.agl, isFalse);
+    expect(parseTfrLevel('3000')?.feet, 3000);
+    expect(parseTfrLevel('400 AGL')?.feet, 400);
+    expect(parseTfrLevel('400 AGL')?.agl, isTrue);
+    expect(parseTfrLevel('17999 MSL')?.feet, 17999);
+    expect(parseTfrLevel('17999 MSL')?.agl, isFalse);
+    expect(parseTfrLevel('0 AGL')?.agl, isTrue);
+    expect(parseTfrLevel('0 MSL')?.agl, isFalse);
+    expect(parseTfrLevel('UNL')?.unlimited, isTrue);
+    expect(parseTfrLevel('Check NOTAMs'), isNull);
+    expect(formatTfrLimit('400', 'HEI', 'FT'), '400 AGL');
+    expect(formatTfrLimit('17999', 'ALT', 'FT'), '17999 MSL');
+    expect(formatTfrLimit('0', 'HEI', 'FT'), '0 AGL');
+    expect(formatTfrLimit('0', 'ALT', 'FT'), '0 MSL');
+    expect(tfrLevelFeet(1000, agl: true, groundFt: 7664), 8664);
+    expect(tfrLevelFeet(0, agl: true, groundFt: 7664), 7664);
+    expect(tfrLevelFeet(1000, agl: false, groundFt: 7664), 1000);
+    expect(tfrAboveScale(parseTfrLevel('15000 MSL'), 10000), isTrue);
+    expect(tfrAboveScale(parseTfrLevel('17999 MSL'), 10000), isTrue);
+    expect(tfrAboveScale(parseTfrLevel('1000 AGL'), 4000), isFalse);
+    expect(tfrAboveScale(parseTfrLevel('0'), 4000), isFalse);
+    expect(airspaceScaleAltitude(4000, [null, 6200, 9100]), 9100);
+    expect(airspaceScaleAltitude(9500, [7014, 6800]), 9500);
     expect(glideRingHasReach(const [LatLng(1, 1), LatLng(1, 1)]), isFalse);
-    expect(glideRingHasReach(const [LatLng(42, -71), LatLng(42.1, -71), LatLng(42, -71)]), isTrue);
+    expect(
+        glideRingHasReach(
+            const [LatLng(42, -71), LatLng(42.1, -71), LatLng(42, -71)]),
+        isTrue);
+  });
+
+  test('surface airspace sits on terrain instead of sea level', () {
+    expect(airspaceAboveGround(0, 7014), 7014);
+    expect(airspaceAboveGround(8000, 7014), 8000);
+    expect(airspaceAboveGround(5000, null), 5000);
+    final inside = clipRingToRing(
+      const [
+        NmPoint(-0.5, -0.5),
+        NmPoint(0.5, -0.5),
+        NmPoint(0.5, 0.5),
+        NmPoint(-0.5, 0.5)
+      ],
+      const [NmPoint(-2, -2), NmPoint(2, -2), NmPoint(2, 2), NmPoint(-2, 2)],
+    );
+    expect(inside.length, 4);
+    final cut = clipRingToRing(
+      const [NmPoint(-2, -2), NmPoint(2, -2), NmPoint(2, 2), NmPoint(-2, 2)],
+      const [NmPoint(-1, -1), NmPoint(1, -1), NmPoint(1, 1), NmPoint(-1, 1)],
+    );
+    expect(cut.length, 4);
+    for (final point in cut) {
+      expect(point.e.abs(), lessThanOrEqualTo(1.01));
+      expect(point.n.abs(), lessThanOrEqualTo(1.01));
+    }
   });
 
   test('plan path is cut to the 25 NM square', () {
@@ -598,6 +975,7 @@ void main() {
     expect(find.text('B'), findsOneWidget);
     expect(find.text('SUA'), findsOneWidget);
     expect(find.text('Terrain'), findsOneWidget);
+    expect(find.text('Wind'), findsNothing);
     expect(find.text('Obstacles'), findsOneWidget);
     expect(find.textContaining('No Class B'), findsNothing);
     await tester.tap(find.text('Obstacles'));
@@ -607,7 +985,49 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('ownship paints inside the area and is dropped outside it', (tester) async {
+  testWidgets('airport diagrams paint when the view has no shelves', (tester) async {
+    const center = LatLng(42.0, -71.0);
+    final scene = AirspaceScene(
+      radiusNm: airspaceViewRadiusNm,
+      shelves: const [],
+      diagrams: [
+        AirspaceDiagram(
+          ident: 'ASH',
+          at: const NmPoint(2, -1),
+          runways: [
+            AirspaceRunway(
+              low: const NmPoint(2, -1.6),
+              high: const NmPoint(2, -0.4),
+              widthFt: 75,
+              surface: 'ASPH',
+              lowIdent: '14',
+              highIdent: '32',
+            ),
+            AirspaceRunway(
+              low: const NmPoint(1.4, -1),
+              high: const NmPoint(2.6, -1),
+              widthFt: 75,
+              surface: 'TURF',
+              lowIdent: '05',
+              highIdent: '23',
+            ),
+          ],
+        ),
+      ],
+    );
+    Airspace3DView.debugSetScene(center, scene);
+    addTearDown(() => Airspace3DView.debugSetScene(center, null));
+
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(body: Airspace3DView(center: center)),
+    ));
+    expect(find.textContaining('Drag to rotate'), findsOneWidget);
+    expect(find.textContaining('No Class B'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('ownship paints inside the area and is dropped outside it',
+      (tester) async {
     const center = LatLng(42.0, -71.0);
     final scene = AirspaceScene(
       radiusNm: airspaceViewRadiusNm,
@@ -683,7 +1103,12 @@ void main() {
           ceilingFt: 50000,
           rings: [
             const AirspaceRing(
-              [NmPoint(-12, -12), NmPoint(12, -12), NmPoint(12, 12), NmPoint(-12, 12)],
+              [
+                NmPoint(-12, -12),
+                NmPoint(12, -12),
+                NmPoint(12, 12),
+                NmPoint(-12, 12)
+              ],
               [false, false, false, false],
             ),
           ],
@@ -705,7 +1130,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('3D view draws Atlanta shelves and accepts a drag', (tester) async {
+  testWidgets('3D view draws Atlanta shelves and accepts a drag',
+      (tester) async {
     const center = LatLng(33.6407, -84.4277);
     final scene = loadClassAirspace(mbtiles!, center);
     Airspace3DView.debugSetScene(center, scene);
@@ -715,7 +1141,10 @@ void main() {
       home: Scaffold(body: Airspace3DView(center: center)),
     ));
 
-    expect(scene.shelves.any((shelf) => shelf.ident == 'KATL' && shelf.label.contains('SF-125')), isTrue);
+    expect(
+        scene.shelves.any(
+            (shelf) => shelf.ident == 'KATL' && shelf.label.contains('SF-125')),
+        isTrue);
     expect(scene.airports.any((mark) => mark.ident == 'KATL'), isTrue);
     expect(find.textContaining('KATL'), findsNothing);
     expect(find.textContaining('Drag to rotate'), findsOneWidget);
@@ -732,6 +1161,9 @@ double _km(LatLng point, double latitude, double longitude) {
   final dLat = (point.latitude - latitude) * math.pi / 180;
   final dLon = (point.longitude - longitude) * math.pi / 180;
   final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
-      math.cos(latitude * math.pi / 180) * math.cos(point.latitude * math.pi / 180) * math.sin(dLon / 2) * math.sin(dLon / 2);
+      math.cos(latitude * math.pi / 180) *
+          math.cos(point.latitude * math.pi / 180) *
+          math.sin(dLon / 2) *
+          math.sin(dLon / 2);
   return radius * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
 }

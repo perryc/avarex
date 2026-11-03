@@ -160,6 +160,8 @@ class _AircraftPerformanceScreenState extends State<AircraftPerformanceScreen> {
   final _customFuelEnduranceController = TextEditingController();
   final _customSinkRateController = TextEditingController();
   final _customBestGlideController = TextEditingController();
+  final _customBestClimbSpeedController = TextEditingController();
+  final _customBestClimbRateController = TextEditingController();
   
   // Dynamic POH entries (combined tables)
   List<_TakeoffLandingEntry> _customTakeoffEntries = [];
@@ -457,6 +459,8 @@ class _AircraftPerformanceScreenState extends State<AircraftPerformanceScreen> {
       _customFuelEnduranceController.text = aircraft.fuelEndurance;
       _customSinkRateController.text = aircraft.sinkRate;
       _customBestGlideController.text = aircraft.bestGlide;
+      _customBestClimbSpeedController.text = aircraft.bestClimbSpeed;
+      _customBestClimbRateController.text = aircraft.bestClimbRate;
     } catch (e) {
       // Aircraft not in database (predefined), use defaults
       _customWake = 'LIGHT';
@@ -469,10 +473,12 @@ class _AircraftPerformanceScreenState extends State<AircraftPerformanceScreen> {
       _customEquipmentController.text = 'S';
       _customSurveillanceController.text = 'N';
       _customOtherController.clear();
-      _customCruiseTasController.clear();
-      _customFuelEnduranceController.clear();
-      _customSinkRateController.clear();
-      _customBestGlideController.clear();
+      _customCruiseTasController.text = _knotsText(a.cruiseSpeedKt);
+      _customFuelEnduranceController.text = _hoursText(a.fuelEnduranceHr);
+      _customSinkRateController.text = _fpmText(a.sinkRateFpm);
+      _customBestGlideController.text = _knotsText(a.bestGlideKt);
+      _customBestClimbSpeedController.text = _knotsText(a.bestClimbKt);
+      _customBestClimbRateController.text = _fpmText(a.bestClimbFpm);
     }
     
     if (a.hasRawEntries) {
@@ -866,6 +872,8 @@ class _AircraftPerformanceScreenState extends State<AircraftPerformanceScreen> {
     _customOtherController.dispose();
     _customCruiseTasController.dispose();
     _customFuelEnduranceController.dispose();
+    _customBestClimbSpeedController.dispose();
+    _customBestClimbRateController.dispose();
     _customSinkRateController.dispose();
     _customBestGlideController.dispose();
     super.dispose();
@@ -1976,6 +1984,8 @@ class _AircraftPerformanceScreenState extends State<AircraftPerformanceScreen> {
               _buildTextField('Fuel Endurance (hrs)', _customFuelEnduranceController, keyboard: const TextInputType.numberWithOptions(decimal: true)),
               _buildTextField('Best Glide Speed', _customBestGlideController, keyboard: TextInputType.number, tooltip: 'POH best-glide speed used by the map glide circle'),
               _buildTextField('Sink Rate (fpm)', _customSinkRateController, keyboard: TextInputType.number, tooltip: 'Power-off sink rate at best glide, used by the map glide circle'),
+              _buildTextField('Best Climb Speed', _customBestClimbSpeedController, keyboard: TextInputType.number, tooltip: 'POH best-rate-of-climb speed. The plan altitude icon uses it for the climb'),
+              _buildTextField('Best Climb Rate (fpm)', _customBestClimbRateController, keyboard: TextInputType.number, tooltip: 'POH best rate of climb in feet per minute. The plan altitude icon uses it for the climb'),
               _buildWakeDropdown(),
             ],
           ),
@@ -2502,6 +2512,8 @@ class _AircraftPerformanceScreenState extends State<AircraftPerformanceScreen> {
       picInfo: _customPicInfoController.text.toUpperCase().trim(),
       sinkRate: _customSinkRateController.text.trim(),
       bestGlide: _customBestGlideController.text.trim(),
+      bestClimbSpeed: _customBestClimbSpeedController.text.trim(),
+      bestClimbRate: _customBestClimbRateController.text.trim(),
       fuelBurn: usableFuel > 0 && _customCruiseEntries.isNotEmpty
           ? _customCruiseEntries.first.gph.toStringAsFixed(1)
           : '',
@@ -2628,6 +2640,8 @@ class _AircraftPerformanceScreenState extends State<AircraftPerformanceScreen> {
     _customFuelEnduranceController.clear();
     _customSinkRateController.clear();
     _customBestGlideController.clear();
+    _customBestClimbSpeedController.clear();
+    _customBestClimbRateController.clear();
   }
 
   Widget _buildPohNoteCard() {
@@ -2677,10 +2691,47 @@ class _AircraftPerformanceScreenState extends State<AircraftPerformanceScreen> {
             const Divider(),
             _buildSpecRow('Max Gross Weight', '${_selectedAircraft.maxGrossWeight.round()} lbs'),
             _buildSpecRow('Usable Fuel', '${_selectedAircraft.usableFuel.round()} gal'),
+            if (_selectedAircraft.cruiseSpeedKt > 0)
+              _buildSpecRow('Cruise Speed', '${_knotsText(_selectedAircraft.cruiseSpeedKt)} ${_speedUnit()}'),
+            if (_selectedAircraft.fuelEnduranceHr > 0)
+              _buildSpecRow('Fuel Endurance', '${_hoursText(_selectedAircraft.fuelEnduranceHr)} hr'),
+            if (_selectedAircraft.bestGlideKt > 0)
+              _buildSpecRow('Best Glide Speed', '${_knotsText(_selectedAircraft.bestGlideKt)} ${_speedUnit()}'),
+            if (_selectedAircraft.sinkRateFpm > 0)
+              _buildSpecRow('Sink Rate', '${_fpmText(_selectedAircraft.sinkRateFpm)} fpm'),
+            if (_selectedAircraft.bestClimbKt > 0)
+              _buildSpecRow('Best Climb Speed', '${_knotsText(_selectedAircraft.bestClimbKt)} ${_speedUnit()}'),
+            if (_selectedAircraft.bestClimbFpm > 0)
+              _buildSpecRow('Best Climb Rate', '${_fpmText(_selectedAircraft.bestClimbFpm)} fpm'),
           ],
         ),
       ),
     );
+  }
+
+  String _speedUnit() => Storage().units.knotsTo == 1 ? 'kt' : 'mph';
+
+  String _knotsText(double knots) {
+    if (knots <= 0) {
+      return '';
+    }
+    final double factor = Storage().units.knotsTo == 0 ? 1 : Storage().units.knotsTo;
+    return (knots * factor).round().toString();
+  }
+
+  String _hoursText(double hours) {
+    if (hours <= 0) {
+      return '';
+    }
+    final String text = hours.toStringAsFixed(1);
+    return text.endsWith('.0') ? text.substring(0, text.length - 2) : text;
+  }
+
+  String _fpmText(double fpm) {
+    if (fpm <= 0) {
+      return '';
+    }
+    return fpm.round().toString();
   }
 
   Widget _buildSpecRow(String label, String value) {

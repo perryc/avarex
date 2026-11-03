@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:avaremp/utils/app_log.dart';
@@ -222,16 +223,83 @@ class WindsCache extends WeatherCache {
     return null;
   }
 
+  static Map<int, List<MapEntry<String, LatLng>>>? _stationGrid;
+
+  static int _stationCell(int latitudeCell, int longitudeCell) =>
+      latitudeCell * 1000 + longitudeCell;
+
+  static Map<int, List<MapEntry<String, LatLng>>> _stationsByCell() {
+    final Map<int, List<MapEntry<String, LatLng>>>? grid = _stationGrid;
+    if (grid != null) {
+      return grid;
+    }
+    final Map<int, List<MapEntry<String, LatLng>>> built = {};
+    for (final MapEntry<String, LatLng> entry in _stationMap.entries) {
+      final int latitudeCell = entry.value.latitude.floor();
+      final int longitudeCell = entry.value.longitude.floor();
+      built
+          .putIfAbsent(_stationCell(latitudeCell, longitudeCell), () => [])
+          .add(entry);
+    }
+    return _stationGrid = built;
+  }
+
+  /// Nearest winds-aloft stations, closest first, inside [maxNm].
+  static List<({String id, LatLng at})> stationsNear(LatLng location, {int count = 3, double maxNm = 350}) {
+    final ranked = <({String id, LatLng at, double nm})>[];
+    for (final MapEntry<String, LatLng> entry in _stationMap.entries) {
+      final double nm = _nmApart(location, entry.value);
+      if (nm <= maxNm) {
+        ranked.add((id: entry.key, at: entry.value, nm: nm));
+      }
+    }
+    ranked.sort((a, b) => a.nm.compareTo(b.nm));
+    final int take = count < ranked.length ? count : ranked.length;
+    return [
+      for (int i = 0; i < take; i++) (id: ranked[i].id, at: ranked[i].at),
+    ];
+  }
+
+  static double _nmApart(LatLng a, LatLng b) {
+    final double cosLat = math.cos(((a.latitude + b.latitude) / 2) * math.pi / 180).abs().clamp(0.2, 1.0);
+    final double east = (b.longitude - a.longitude) * 60.0 * cosLat;
+    final double north = (b.latitude - a.latitude) * 60.0;
+    return math.sqrt(east * east + north * north);
+  }
+
+  /// Nearest winds-aloft station. Cells are one degree. The square grows until
+  /// the nearest station inside it is closer than the square's edge, so a
+  /// station outside that square cannot be closer.
   static String? locateNearestStation(LatLng location) {
-    // find distance
-    GeoCalculations geo = GeoCalculations();
+    final GeoCalculations geo = GeoCalculations();
+    final Map<int, List<MapEntry<String, LatLng>>> grid = _stationsByCell();
+    final int latitudeCell = location.latitude.floor();
+    final int longitudeCell = location.longitude.floor();
     double distanceMin = double.maxFinite;
     String? station;
-    for(MapEntry<String, LatLng> map in _stationMap.entries) {
-      double distance = geo.calculateDistance(map.value, location);
-      if(distance < distanceMin) {
-        distanceMin = distance;
-        station = map.key;
+    for (int radius = 1; radius <= 40; radius++) {
+      for (int dLat = -radius; dLat <= radius; dLat++) {
+        for (int dLon = -radius; dLon <= radius; dLon++) {
+          if (radius > 1 && dLat.abs() < radius && dLon.abs() < radius) {
+            continue;
+          }
+          final List<MapEntry<String, LatLng>>? nearby =
+              grid[_stationCell(latitudeCell + dLat, longitudeCell + dLon)];
+          if (nearby == null) {
+            continue;
+          }
+          for (final MapEntry<String, LatLng> entry in nearby) {
+            final double distance = geo.calculateDistance(entry.value, location);
+            if (distance < distanceMin) {
+              distanceMin = distance;
+              station = entry.key;
+            }
+          }
+        }
+      }
+      // One degree of longitude is about 10 nm at 80° latitude.
+      if (station != null && distanceMin <= radius * 10.0) {
+        return station;
       }
     }
     return station;

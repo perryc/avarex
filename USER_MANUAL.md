@@ -15,6 +15,69 @@ This manual documents all features in the current AvareX app, including:
 
 ## AvareX Releases
 
+**0.0.141**
+
+- Added the `RES` instrument tile. It shows the app's memory use in MB, current on top and maximum below.
+
+**0.0.140**
+
+- Added the `Cameras` map layer: FAA WeatherCams sites show as camera icons from zoom level 10. Tap one for the latest picture from each camera.
+- Map layers return to their defaults once.
+- In Documents, tap an internet picture to open it full screen, then swipe for the next one.
+- Interrupted or damaged chart downloads no longer break the database.
+
+**0.0.139**
+
+- Added 3D Weather, under Menu and as the `3DW` tab on a long press. It shows winds aloft with the terrain, runways, and aircraft. `Hide Wind` and `Show Wind` turn the wind on and off.
+- 3D Weather has buttons to build 3D NEXRAD radar, lightning, icing, and turbulence. The radar plays the last half hour. Each layer has a key, and must be rebuilt after its time runs out.
+- 3D shows a red arrow with an N above the altitude scale, pointing north as you turn the view.
+- Exit asks Yes or No, with No as the default. On Android, Yes also stops GPS and downloads.
+- The PLAN wind chart samples the middle of each column of the route, and has no seams between cells.
+- The plan uses the first built-in aircraft when none was picked on Aircraft & Performance.
+- Fixed a flash on the plate overlay.
+
+**0.0.138**
+
+- Added Emergency mode under Map Settings, Profiles, Emergency. It opens a north-up map with the glide ring and four cards for best glide speed, the best runway to land on, a checklist, and the frequencies to declare.
+- Pick the Emergency checklist from the Emergency tile on the Profile screen.
+- The glide circle, plan cruise, and aircraft icon use the aircraft chosen on Aircraft & Performance.
+- Chart downloads work out the chart cycle from the date.
+
+**0.0.137**
+
+- Built-in aircraft include cruise speed, fuel endurance, best glide, sink rate, and best climb.
+- The glide circle and the PLAN altitude icon use those figures when the profile leaves them empty.
+- 3D draws each airport's runway diagram at the field.
+- 3D leaves out the circle at a surface airport.
+- Help copies this version's manual into Documents, named with the version, and drops the copy from an older install.
+- The weather altitude slider label is larger.
+- Menu `Messages` keeps each Apps4Av message until you swipe it away.
+- Select the title, text, or web address in an Apps4Av message to copy it.
+
+**0.0.136**
+
+- Type an altitude on each PLAN waypoint.
+- The altitude icon picks the fastest cruise altitude from winds and the aircraft.
+- Add Best Climb Speed and Best Climb Rate. The altitude icon uses them.
+- Opening PLAN fills cruise speed and fuel flow from the aircraft.
+- A procedure altitude is copied into the plan Alt column.
+- 3D draws the plan at each leg's altitude.
+- 3D shelf floors sit on the terrain.
+- 3D TFR shows AGL or MSL, and the picture includes that ground.
+- TFR details show AGL or MSL.
+- Onboarding downloads Elevation with the other charts.
+- Tap the MT tile to switch North Up and Track Up. Olive means track-up.
+- The weather altitude slider sits under the Pro icon.
+- Map and Plate stay loaded when you switch between them.
+- 3D Wind starts off. Turn it on for colored winds-aloft streaks.
+- Wind streaks in 3D stay above the terrain.
+- The plan wind chart keeps the last forecast while a new one downloads.
+
+**0.0.135**
+
+- Share the active plan from Menu `Link`. One device is Master. Slave devices copy that plan and the active waypoint.
+- Sync plates to the active airport waypoint.
+
 **0.0.134**
 
 - Open the PFD from `Menu`.
@@ -132,7 +195,7 @@ On first run, complete onboarding pages (titles match the screens):
    - **Display Theme**: `Night` / `Day`
    - **Measurement Units**: `NM / Knots` (Maritime) or `SM / MPH` (Imperial)
 3. **Internet and GPS**: confirm GPS permissions (`GPS Permissions`) and note that GPS can come from the device or an external ADS-B/GPS stream.
-4. **Databases and Maps**: AvareX **automatically** downloads what is missing for your current GPS region — the **DatabasesX** package plus the region's **Sectional**, **Plates**, and **CSUP** — in one blocking step. Nothing to tap. Use **Choose Manually** to open the full `Download` screen if you want to pick specific data.
+4. **Databases and Maps**: AvareX **automatically** downloads what is missing for your current GPS region — the **DatabasesX** package plus the region's **Sectional**, **Plates**, **CSUP**, and **Elevation** — in one blocking step. Nothing to tap. Use **Choose Manually** to open the full `Download` screen if you want to pick specific data.
 5. **Keep Warnings in Check**: when the red warning icon appears, tap it for troubleshooting.
 6. **Optimize Performance**: turn off unused map layers (layers icon on the MAP screen) for best performance.
 7. **File Flight Plans** (optional): enter the same email you use at 1800wxbrief.com to register for FAA flight-plan workflows.
@@ -156,7 +219,7 @@ You can reopen onboarding later from the drawer header icon (`Show intro screens
 | Avidyne IFD ADS-B traffic & weather (Capstone GDL90 over Wi-Fi)                                  | All supported platforms |
 | Flight Intelligence (Pro)                                                                        | **iOS and Android only** |
 | Internet drawer section (Account, Backup/Sync, Community, Aircraft Scheduler)                    | **iOS, Android, Windows, and macOS** |
-| Apps4Av message when the app opens                                                               | **iOS, Android, Windows, and macOS** |
+| Apps4Av messages (popup, and Menu `Messages` until you delete one)                               | **iOS, Android, Windows, and macOS** |
 | Airport Businesses & Reviews (free, sign-in required)                                            | **iOS, Android, Windows, and macOS** |
 | PDF viewing in Documents/Help                                                                    | Not available on Linux |
 | File sharing from Documents/Logbook export                                                       | Not available on Linux |
@@ -183,13 +246,13 @@ After onboarding, the app opens to `MainScreen` with:
 Open from MAP with **Menu** button (bottom-left). Items are grouped by section headers:
 
 - **DATA**: `Download` (Charts & databases), `Documents` (Weather, manuals, notes, tracks)
-- **FLIGHT**: `Write a Note`, `3D`, `PFD`, `Check Lists`, `Aircraft & Performance`
+- **FLIGHT**: `Write a Note`, `3D`, `3D Weather`, `PFD`, `Check Lists`, `Aircraft & Performance`
 - **RECORDS**: `Log Book`
 - **INTERNET** (iOS/Android/Windows/macOS): `Account` (Sign in, profile, sign out), `Backup/Sync`, `Community` (unread notifications bell), `Scheduler`, and `Flight Intelligence` (iOS/Android only; Pro)
 - **CONNECTIVITY**: `Link` (share the active plan with other AvareX devices on the same Wi-Fi). `IO` (Android only; Bluetooth & connections)
-- **SUPPORT**: `Help` (User manual PDF; not available on Linux)
+- **SUPPORT**: `Messages` (Notices from Apps4Av; iOS, Android, Windows, and macOS), `Help` (User manual PDF; not available on Linux)
 
-`3D`, under `Write a Note`, opens the same airspace view as the destination popup, centered on the aircraft, without the yellow long-press mark. Downloaded Elevation tiles are drawn as terrain (brown, and red within 500 ft of altitude). ADS-B traffic inside 25 NM is drawn as dots. The active plan is drawn at its altitude. The glide ring, and `TFR` and `Game TFR` volumes when those layers are on, are drawn here too. See Section 9.8.
+`3D`, under `Write a Note`, opens the same airspace view as the destination popup, centered on the aircraft, without the yellow long-press mark. Downloaded Elevation tiles are drawn as terrain (brown, and red within 500 ft of altitude). Shelf floors sit on that surface instead of extending below it. ADS-B traffic inside 25 NM is drawn as dots. The active plan is drawn at each leg's altitude. The glide ring, and `TFR` and `Game TFR` volumes, are drawn here too, whatever the map layers are set to. Each airport inside 25 NM is drawn as its runway diagram at the field. See Section 9.8. For winds aloft and 3D radar, use `3D Weather` (Section 9.8.1).
 
 `PFD`, under `3D`, opens the same Primary Flight Display as the map `PFD` layer, on its own screen. The map layer is unchanged. See Section 9.9.
 
@@ -210,7 +273,7 @@ The **instrument tiles** float as a movable overlay over the map (GS, ALT, MT, P
 ### 4.2 Core interactions
 
 - Pan/zoom map
-- Track-up or North-up orientation toggle
+- Track-up or North-up orientation toggle (`Map Settings`, or tap the `MT` tile)
 - Long-press behavior:
   - If ruler mode OFF: opens destination popup near pressed location
   - If ruler mode ON: drops ruler points for distance/bearing measurement
@@ -220,6 +283,7 @@ The **instrument tiles** float as a movable overlay over the map (GS, ALT, MT, P
 
 #### Top-right
 - **Pro icon** (iOS/Android): opens `Flight Intelligence` when you are signed in, or the `Account` sign-in screen if you are not. Manage the account from `MAP → Menu → Internet → Account`.
+- **Altitude slider** (under the Pro icon, when Cloud tops, Icing, Turbulence, Ceiling, or Wind vectors are on): vertical slider, 0 to 30,000 ft.
 - **Red warning icon** (if active): opens troubleshooting drawer.
 
 #### Bottom center
@@ -241,11 +305,11 @@ Tap the gear icon in the bottom-right control row to open the `Map Settings` lis
 - **Measure Distance On / Measure Distance Off**: toggles measure mode; long-press map to add points.
 - **Rubber Banding On / Rubber Banding Off**: toggles dragging route waypoints directly on map.
 - **Audible Alerts On / Audible Alerts Off**: toggles audible alerts (traffic, GPWS, runway awareness).
-- **North Up / Track Up**: shows the current orientation mode; tap to switch.
-- **Profiles**: tap the `Profiles` heading to open the Profile screen, where a name can be saved and a profile deleted. Saved profiles are listed under the heading by name. Tap a name to apply the items that were checked for that profile.
+- **North Up / Track Up**: shows the current orientation mode; tap to switch. Tapping the **MT** instrument tile does the same thing. The tile is olive in track-up and the normal tile color in north-up.
+- **Profiles**: tap the `Profiles` heading to open the Profile screen, where a name can be saved and a profile deleted. Saved profiles are listed under the heading by name. Tap a name to apply the items that were checked for that profile. The red `Emergency` profile is always first. It opens the Emergency map instead of applying settings (see 9.4.2).
 
 #### Top-left
-- **Instrument tiles menu** (arrow dropdown): tile sizing, lock/reset layout, and show/hide individual instrument tiles (including the `ADSB` tile).
+- **Instrument tiles menu** (arrow dropdown): tile sizing, lock/reset layout, and show/hide individual instrument tiles (including the `ADSB` and `RES` tiles).
 
 #### Nav sub-layers (in the Layers popup)
 - With the **Nav** layer above 0%, **Obstacles**, **Tape**, **Circles**, and **CAP Grid** appear indented under it, each with its own opacity slider.
@@ -261,9 +325,9 @@ Tap the gear icon in the bottom-right control row to open the `Map Settings` lis
   - `M`: 200 aircraft, 6000 ft, 50 NM
   - `L`: 1000 aircraft, 30000 ft, 500 NM
 
-#### Altitude slider (right side)
-- Appears with the **Weather** layer when a product needing an altitude is on: Cloud tops, Icing, Turbulence, Ceiling, or Wind vectors.
-- Range: 0 to 30,000 ft (1,000 ft increments).
+#### Altitude slider (under the Pro icon)
+- Appears on the right, under the Pro icon, with the **Weather** layer when a product needing an altitude is on: Cloud tops, Icing, Turbulence, Ceiling, or Wind vectors.
+- Range: 0 to 30,000 ft (1,000 ft increments). The altitude label is larger while you drag.
 
 ### 4.4 Map chart types
 
@@ -297,6 +361,7 @@ Layer list from settings (with per-layer opacity 0-100%):
 | **Weather** | METAR/TAF/PIREP/AIRMET/SIGMET symbols plus selectable weather products (multiple at once) listed under **Weather** in this popup: ADS-B Radar, ADS-B Cloud Tops, ADS-B Icing, ADS-B Turbulence, ADS-B Lightning, Radar (internet), Ceiling, and Wind Vectors — each with its own opacity slider like map layers. Use the altitude slider when tops/icing/turbulence/ceiling/winds are on. |
 | **TFR** | Temporary flight restriction shapes/markers with time validity. Red=active, orange=future. |
 | **Game TFR** | Stadium / motor speedway TFRs (14 CFR 99.7): orange 3 NM rings and a stadium marker at NFL, MLB, NCAA Division I football, and major speedway venues. Applies when the event is in progress, SFC–3000 ft AGL. Tap a marker for the venue name. |
+| **Cameras** | FAA WeatherCams (weathercams.faa.gov) camera sites as a black camera icon at each site (grey if the site is in maintenance). Icons show at zoom level 10+. Needs internet; not on the web build. Tap an icon to open that site's latest picture from every camera. |
 | **Plate** | Georeferenced plate overlay on map (when loaded). |
 | **Traffic** | Avare-style simple traffic dots with a 1-minute projection line drawn in the direction of travel. Cyan circle (with black outline) for normal/proximate traffic, red circle (with black outline) for threat traffic (advisory or resolution alert). Each dot is annotated with the relative flight-level offset, vertical trend arrow, and callsign. Integrates with audible alerts. |
 | **Obstacles** (under Nav) | Obstacle markers (red squares) in your vicinity. |
@@ -322,7 +387,7 @@ Instrument tiles float as a full-screen overlay on top of the map. Each tile can
 |------|-------------|------------|
 | **GS** | Ground speed (knots/mph) | — |
 | **ALT** | GPS altitude (feet) | — |
-| **MT** | Magnetic track (degrees) | — |
+| **MT** | Magnetic track (degrees). Olive while the map is track-up; normal tile color while north-up. | Toggle North Up / Track Up |
 | **PRV** | Previous waypoint identifier | Jump to previous waypoint |
 | **NXT** | Next waypoint identifier | Jump to next waypoint |
 | **DIS** | Distance to next waypoint (NM/mi) | — |
@@ -337,6 +402,7 @@ Instrument tiles float as a full-screen overlay on top of the map. Each tile can
 | **SRC** | GPS source mode. Shows `Internal`, `External`, `Internal-A`, or `External-A` (A=Auto mode) | Tap to cycle modes: Auto, Internal, External. Green=Internal, Blue=External |
 | **FLT** | Total flight time in hours | Reset timer |
 | **ADSB** | ADS-B receiver status (from GDL90 heartbeat + FIS-B uplinks). Shows your own tail number when the receiver reports it; otherwise a status circle — green filled circle ● = connected with GPS, yellow filled circle ● = connected without GPS (partial), empty circle ○ = disconnected. Only the text/circle is colored; the tile background is unchanged. Enable from the tiles menu. | Open the **ADS-B Status** screen |
+| **RES** | App memory use (resident set size) in MB. First line is current, second line is the maximum since the app started. Enable from the tiles menu. | — |
 
 Interactions:
 
@@ -349,7 +415,7 @@ Interactions:
   - **Ownship**: ICAO, position, altitude, ground speed, track/heading with track type, vertical speed, NIC/NACp, report (updated/extrapolated), and airborne state.
   - **FIS-B uplink**: ground station position, position-valid flag, slot ID, TIS-B site ID, and each weather product carried in the frame, decoded individually:
     - **METAR/SPECI/TAF/PIREP/Winds Aloft**: the full textual report.
-    - **NOTAM / NOTAM-TFR**: NOTAM text, or for TFRs the report number, polygon vertex count, altitude band, and effective/expiry times.
+    - **NOTAM / NOTAM-TFR**: NOTAM text, or for TFRs the report number, polygon vertex count, altitude band (`AGL` or `MSL`), and effective/expiry times.
     - **D-ATIS / TWIP**: airport digital ATIS and terminal weather text (also stored for the airport **NOTAM** tab).
     - **NEXRAD radar** (regional or CONUS): the bin block number and whether the block carries precipitation or is empty.
     - **Icing / Turbulence / Cloud tops / Lightning**: block number, scale, altitude band (icing and turbulence), and whether the block carries data or is empty.
@@ -396,8 +462,9 @@ Alerts share the global **Audible Alerts** control (`MAP → Map Settings`) with
 - **TAF tap**: Shows TAF forecast
 - **PIREP tap**: Shows pilot report
 - **AIRMET/SIGMET tap**: Shows advisory text. **Long-press**: toggles shape visibility on map
-- **TFR tap**: Shows TFR details (altitudes, times)
+- **TFR tap**: Shows TFR details, including whether each altitude is `AGL` or `MSL`
 - **Game TFR tap**: Shows venue name and `Game TFR (3 NM, SFC-3000' AGL when active)`
+- **Cameras tap**: Opens the pictures from that camera site. Each camera shows its direction (with an arrow for the bearing), the age and UTC time of the picture, and a note if it is out of order or in maintenance. Tap a picture to open it full screen with pinch zoom. Pull down to reload.
 
 ### 4.9 Ruler/measurement tool
 
@@ -427,7 +494,7 @@ Alerts share the global **Audible Alerts** control (`MAP → Map Settings`) with
 - **→D**: set Direct-To destination, center map there, return to map
 - **+Plan**: insert destination into current plan at the current waypoint position
 - **↓Plan**: append destination to the end of the plan
-- **Plates** (airport only): jump to PLATE tab at that airport
+- **Plates** (airport only): jump to the `PLATE` tab for that airport, even when it is not the active waypoint
 
 ### 5.3 Information pages (shown when data exists)
 
@@ -439,7 +506,8 @@ Possible tabs:
 - **NOTAM**: fetched NOTAM list from the FAA production NOTAM service (downloaded async). On iOS/Android, each NOTAM has a **Translate** icon that opens `Flight Intelligence` with only that NOTAM, asking for a plain-English translation (Pro).
 - **SUA**: special-use airspace data for the area
 - **Wind**: nearest winds-aloft station data at multiple altitudes
-- **3D**: Class B, C, and D shelves, plus restricted, warning, prohibited, and MOA areas, within 25 NM of this place, from the Vector Map database. Drag to rotate, pinch to zoom, and drag with two fingers to pan. Class colors match the Vector Map (B blue, C magenta, D light blue). Restricted areas are red, warning areas are brown, prohibited areas are purple, and MOAs are olive. Each shelf is labeled with its altitude range, for example `25-43`. An airport with surface airspace is marked with a flat circle on the ground and its name, such as `KMHT`. Areas without an airport, such as `R-4101A SF-25`, keep the name on the shelf and have no circle. Altitudes are hundreds of feet MSL (`25-43` is 2500–4300; `05` is 500; `SF` is the surface; `UNL` is unlimited). Anything above 10,000 ft is cut there so a tall area does not cover the airport. The cut is an open dashed top with a fading outline and upward marks, and the label still shows the real ceiling (`R-5203 SF-500`). Obstacles from the main database are red lines from the ground to the obstacle top. A yellow line marks the long-press point. The ownship is a larger white dot with a black ring that pulses once a second, so it is not a traffic dot, and it moves with the aircraft while it is inside this 25 NM area. The active plan is drawn at its altitude: cyan for the part already flown, purple for the current leg, and grey ahead, matching the map. The glide ring is a white circle with an orange halo on the surface, and an orange cone from the aircraft down to that circle. When the `TFR` layer is on, areas in effect are red volumes and later ones are brown. When `Game TFR` is on, each venue is an orange cylinder 3 NM across, from the surface to 3000 ft above the ground. Chips along the bottom show or hide Class `B`, `C`, and `D`, `SUA` (restricted, warning, prohibited, and MOA), terrain, `TFR`, `Game TFR`, the plan, and obstacles. **Reset** restores the view. If Vector Map is not downloaded, the page says so.
+- **3D**: Class B, C, and D shelves, plus restricted, warning, prohibited, and MOA areas, within 25 NM of this place, from the Vector Map database. Drag to rotate, pinch to zoom, and drag with two fingers to pan. Class colors match the Vector Map (B blue, C magenta, D light blue). Restricted areas are red, warning areas are brown, prohibited areas are purple, and MOAs are olive. Each shelf is labeled with its altitude range, for example `25-43`. An airport with surface airspace is named on the ground, such as `KMHT`. Each airport inside 25 NM is also drawn as its runway diagram on the ground at the field. The pavement follows the runway ends. A field with one runway and no ends uses that runway's length and heading. Pavement matches the AD tab, with the runway numbers at the ends. Areas without an airport, such as `R-4101A SF-25`, keep the name on the shelf. Altitudes are hundreds of feet MSL (`25-43` is 2500–4300; `05` is 500; `SF` is the surface; `UNL` is unlimited). Anything above 10,000 ft is cut there so a tall area does not cover the airport. The cut is an open dashed top with a fading outline and upward marks, and the label still shows the real ceiling (`R-5203 SF-500`). Obstacles from the main database are red lines from the ground to the obstacle top. A yellow line marks the long-press point. Downloaded Elevation tiles are drawn as terrain, brown and red within 500 ft of altitude. A shelf floor that is below that terrain, including surface Class D, is drawn from the ground up so the volume does not continue under the surface. The ownship is a larger white dot with a black ring that pulses once a second, so it is not a traffic dot, and it moves with the aircraft while it is inside this 25 NM area. The active plan is drawn at each leg's altitude: cyan for the part already flown, purple for the current leg, and grey ahead, matching the map. The line leaves a departure airport at field elevation and arrives at a destination airport at field elevation. The glide ring is a white circle with an orange halo on the surface, and an orange cone from the aircraft down to that circle. When the `TFR` layer is on, areas in effect are red volumes and later ones are brown. A TFR whose floor is above the picture is a dashed outline at the top of the scale with arrows pointing up. When `Game TFR` is on, each venue is an orange cylinder 3 NM across, from the surface to 3000 ft above the ground. Chips along the bottom show or hide Class `B`, `C`, and `D`, `SUA` (restricted, warning, prohibited, and MOA), terrain, `TFR`, `Game TFR`, the plan, and obstacles. **Reset** restores the view. If Vector Map is not downloaded, the page says so.
+- **3DW**: the same 3D box as 3D Weather, for weather instead of airspace, centered on this place, with the yellow long-press mark. It shows the terrain, the runway diagrams, the aircraft, and the winds aloft. Use the build buttons for 3D radar, lightning, icing, and turbulence. See Section 9.8.1.
 - **ST**: sounding chart/image for the area (Skew-T diagram)
 - **Business**: for airports, lists the crowd-sourced businesses/FBOs for that airport inline (free; sign-in required) with details and reviews shown in place — see Section 11.7
 
@@ -470,6 +538,8 @@ If nearby alternatives exist, a horizontal "Nearby" selector appears.
 - **Procedure menu** (plus icon near bottom-right):
   - Tap a procedure to show its profile, draw the CIFP route on georeferenced plates (progress-colored), and add its waypoint sequence to the plan
 - **Instrument overlay show/hide** toggle (top-right arrow icon)
+- **Airport diagram on landing** (top-right, airport diagram only): landing icon under the instrument toggle. On shows the nearest airport diagram after landing. Off leaves the current plate in place.
+- **Sync plates** (directly under the landing icon, airport diagram only): on follows the active waypoint when that waypoint changes to a different airport, including while you are on another tab. The plate becomes that airport's diagram when one is downloaded, otherwise its first plate. A plate already open for that same airport stays. Off leaves whatever plate is showing. Opening `Plates` for a long-pressed airport still shows that airport.
 - **Profile close (X)** closes procedure profile card and clears the route overlay
 - **IAF chips** (black with white text, above profile when multiple transitions exist): switch IAF without re-adding to the plan
 
@@ -520,9 +590,14 @@ On airport diagrams, when businesses with a known location exist for the airport
 
 The businesses come from the shared Firestore directory (see Section 11.7), so this selector appears only on iOS/Android/Windows/macOS and when you are signed in.
 
-### 6.7 Automatic behavior on landing
+### 6.7 Automatic plate changes
 
-Flight-state logic can auto-switch plate context to nearest airport diagram after landing (if available).
+Two controls on an airport diagram, stacked under the instrument toggle, can change which airport is shown. Anything else leaves the current plate alone.
+
+- **Landing** (landing icon): after landing, switch to the nearest airport diagram when that airport has one.
+- **Sync** (sync icon): when the active waypoint changes to a different airport, switch to that airport. This runs on the `PLATE` tab and while another tab is showing. A fix, navaid, airway, or a plate already open for that same airport does not change. `Plates` on a long-pressed airport still opens that airport.
+
+Turning a control off stops only that automatic change. The airport selector, plate selector, and long-press `Plates` button still work.
 
 ---
 
@@ -532,7 +607,7 @@ Flight-state logic can auto-switch plate context to nearest airport diagram afte
 
 Tap bottom tab **PLAN**.
 
-![PLAN tab — empty state with totals header and bottom action buttons plus ASpd/GPH/Alt controls](assets/docs/screenshots/19_plan_tab_empty.png)
+![PLAN tab — empty state with totals header, altitude column, and the settings row](assets/docs/screenshots/19_plan_tab_empty.png)
 
 After waypoints are added (e.g. `KBOS BOS CMK KHPN`), each row shows distance/ground speed/course/time/fuel calculations:
 
@@ -544,18 +619,17 @@ After waypoints are added (e.g. `KBOS BOS CMK KHPN`), each row shows distance/gr
 - Swipe row right-to-left to delete waypoint
 - Tap row to set current waypoint (highlighted in purple with "ACTIVE" badge)
 - When this device is a **Slave** in `Link`, the plan and the active waypoint follow the master. Edits made on the slave are replaced by the master's next update.
-- **Insert waypoint**: tap a waypoint to select it, then press the **+** button to insert a new waypoint after that position (opens FIND tab; next selection inserts after the selected waypoint)
+- **Insert waypoint**: tap a waypoint to select it, then press **+** (left of the wind forecast) to insert a new waypoint after that position (opens FIND tab; next selection inserts after the selected waypoint)
 - Long press (grab) a waypoint to move it up and down
-- Header row shows plan-wide calculated totals (Distance, Ground Speed, Course, Time, Fuel)
-- **Delete entire plan** (trash icon, top-right of header): confirms, then removes all waypoints from the active plan (hidden when the plan is empty)
+- Header row shows plan-wide calculated totals (Distance, Ground Speed, Course, Time, Fuel). Column labels are **Dist**, **GSpd**, **Crs**, **Time**, **Fuel**, **Alt**
+- Each waypoint row has an **Alt** field (feet): the altitude at that waypoint. It starts at the plan default (3000 ft, or the map altitude slider). The first waypoint, when it is an airport, uses that airport's field elevation. Moving an airport into the first row sets Alt back to field elevation. After the altitude icon runs, Alt is the altitude the airplane has reached there while it is still climbing. Once it levels at a cruise altitude, Alt stays on that altitude, and the arrival descent does not replace it with an in-between number. Climb and descent follow best climb speed and rate, so a one-mile leg stays near the altitude it started at and the climb continues on the next leg. The last waypoint stays on the cruise altitude that leg leaves; the path still descends to the runway. Type a new altitude and leave the field to aim that leg at it (ground speed, time, and fuel update). The field shows the altitude reached there. Legs after that one keep the altitudes already chosen. Clear the field to go back to the plan default. Fixes inside an airway or procedure each have their own **Alt**.
+- **Delete entire plan** (trash icon, right of the navigation-log button): confirms, then removes all waypoints from the active plan (hidden when the plan is empty)
 - Airways and procedures show as expandable items with nested waypoints
 
-Bottom controls are arranged in two rows. The **settings row** (on top) is only shown on the **Plan** tab and holds the plan calculation controls:
+Bottom controls are arranged in two rows. The **settings row** (on top) is only shown on the **Plan** tab and holds **+**, the forecast, the altitude icon, the navigation log, and delete:
 
-- **ASpd** field: true airspeed used in calculations (knots)
-- **GPH** field: fuel burn (gallons per hour)
-- **Alt** field: plan altitude (feet, default 3000)
-- **Aircraft icon** (next to Alt): loads **ASpd** and **GPH** using the same aircraft as the **Performance** screen app-bar **dropdown** (latest selection), interpolated at the plan **Alt** using the **saved cruise power %** from the Performance **Cruise** tab (ISA deviation 0; custom *My Aircraft* cruise table when that tail is selected, otherwise built-in POH when a template is selected). If no power has been saved yet, **65%** is used. If you have never opened Performance, aircraft selection falls back to the map aircraft setting when set.
+- Opening PLAN reads cruise speed and fuel flow once from the selected aircraft. That aircraft is the **Performance** screen app-bar **dropdown** (latest selection). Cruise is interpolated at the plan default altitude using the **saved cruise power %** from the Performance **Cruise** tab (ISA deviation 0; custom *My Aircraft* cruise table when that tail is selected, otherwise built-in POH when a template is selected). If no power has been saved yet, **65%** is used. If you have never opened Performance, aircraft selection falls back to the map aircraft setting when set.
+- **Altitude icon** (next to the forecast dropdown, tooltip *"Calculate altitudes"*): chooses cruise altitudes for the shortest time from winds aloft and the selected aircraft, at the saved cruise power % and standard-day (ISA deviation 0). The route starts at the departure field elevation and ends with a descent to the arrival field elevation. A climb is the fastest altitude for the rest of the route, at least 1,000 ft above the highest terrain in the next 50 miles, and then it waits 50 miles. A descent can begin 20 miles after the airplane is at that altitude, when the lower altitude is faster over those miles. Climb and descent use **Best Climb Speed** and **Best Climb Rate** from the aircraft. When those fields are empty, the selected built-in aircraft supplies its handbook climb speed and rate. If they are still empty, climb uses three quarters of cruise speed and a rate that slows from about 700 ft/min near the surface to about 100 ft/min at the top of the cruise table. Time and fuel on each leg use climb speed while the altitude is changing and cruise speed while level. Alt at each waypoint is the altitude reached there while the airplane is still climbing, so a short leg stays low while the climb continues. After the airplane levels off, Alt stays on that cruise altitude through the arrival descent. That altitude is a multiple of 500 ft: an odd thousand when the course from the first waypoint to the last is east, and an even thousand when that course is west. Terrain is read every mile, the same spacing as the plan chart. The cruise altitude and the wind used for ground speed stay at least 1,000 ft above the terrain. The altitude line climbs to that clearance at best climb rate, so the first miles of a departure are only as high as that rate allows. The path still meets the runway at the departure and arrival airports. A waypoint **Alt** you type yourself changes that leg to that altitude, using the cruise speed and fuel flow read when PLAN opened. Legs after it keep the altitudes the icon chose. A toast says: Calculated altitudes for shortest flight time based on winds aloft and performance of the aircraft name. If winds aloft are not available, it still picks the fastest altitudes.
 - **Forecast horizon** selector: 06H / 12H / 24H (winds aloft forecast period)
 - **Analytics icon** (chart): opens full-screen Navigation Log
 
@@ -566,18 +640,18 @@ The **tab row** (below the settings row) switches what the PLAN tab shows; the a
 
 ### 7.3 Navigation Log dialog
 
-Open from the PLAN tab by tapping the **analytics** icon (graph, tooltip *"Navigation log and terrain"*) at the far right of the bottom row.
+Open from the PLAN tab by tapping the **analytics** icon (graph, tooltip *"Navigation log and terrain"*) on the settings row, to the right of the altitude icon.
 
 ![Navigation Log full-screen dialog — per-leg grid on top, Winds & Terrain En Route diagram on the bottom; back/save/copy icons in the app bar](assets/docs/screenshots/23_plan_navlog.png)
 
 Includes:
 
-- **Per-leg log grid** with columns: FM (from), TO (to), AL (altitude), TC (true course), VR (variation), MC (magnetic course), WD (wind direction@speed), CA (wind correction angle), MH (magnetic heading), DT (distance), GS (ground speed), TM (time), FC (fuel consumption). The bottom row of the grid totals DT/TM/FC for the whole plan.
+- **Per-leg log grid** with columns: FM (from), TO (to), AL (altitude), TC (true course), VR (variation), MC (magnetic course), WD (wind direction@speed), CA (wind correction angle), MH (magnetic heading), DT (distance), GS (ground speed), TM (time), FC (fuel consumption). AL is the altitude at the waypoint you are flying to. On a short leg that is only as high as the climb has reached, and the cyan line keeps climbing after that waypoint. After the airplane levels off, AL stays on that cruise altitude, and the line still descends to the runway. The last row stays on the cruise altitude its leg leaves. The bottom row of the grid totals DT/TM/FC for the whole plan.
   - Grid is zoomable/pannable; **double-tap** to reset zoom
 - **Winds & Terrain En Route diagram**: combined visualization showing wind components and terrain profile:
-  - **Wind heat map**: color-coded cells at altitudes 0-18000 ft along route (green = tailwind, red = headwind, darker = lighter winds, brighter = stronger winds up to 50 kt scale)
-  - **Plan altitude line**: cyan horizontal line showing your planned altitude
-  - **Terrain profile overlay**: terrain elevation curve with color coding (green = safe below plan altitude, red = at or above plan altitude)
+  - **Wind heat map**: color-coded cells at altitudes 0-18000 ft along route (green = tailwind, red = headwind, darker = lighter winds, brighter = stronger winds up to 50 kt scale). The last forecast stays on the chart while a newer one downloads
+  - **Plan altitude line**: cyan line of the altitude flown. After the altitude icon runs, it climbs and descends at best climb speed and rate, levels off at the altitude that is fastest for the rest of the route, and can step down after 20 miles. A short leg rises only as far as that rate allows, and the climb continues after that waypoint. It ends at the arrival field elevation in one steady descent when the wind changes along the way. Typing an altitude moves that leg to the altitude you typed. The line after that leg stays on the altitudes already chosen and still ends at the arrival field elevation
+  - **Terrain profile overlay**: terrain elevation curve. Green where terrain is below that leg's altitude, red where it is at or above it
   - **Waypoint markers**: cyan tick marks at the bottom showing waypoint positions along the route
   - **Interactive tap**: tap anywhere on the diagram to display a tooltip with:
     - Nearest waypoint (if within 5% of route position)
@@ -727,6 +801,7 @@ Purpose:
 
 - Install/update/delete downloadable data sets by chart category and region
 - Monitor progress with per-item progress ring and stop button
+- Each download is checked for size and damage before it replaces the old copy. If a download stops early, is cancelled, or is damaged, the old data stays in place and the item is left as not installed so it can be tried again
 
 **Status Summary Card:**
 - Shows counts of Current, Expired, To Download, and To Delete items
@@ -755,7 +830,7 @@ Major download categories include:
 - **VFR Charts**: Sectional, TAC, Flyway, Helicopter
 - **IFR Charts**: IFR Low, IFR High, IFR Area
 - **Procedures**: Plates, CSUP
-- **Terrain**: Elevation
+- **Terrain**: Elevation (fetched automatically during onboarding for your GPS region)
 
 Regional coverage (9 regions): Northeast, North Central, Northwest, Southeast, South Central, Southwest, East Central, Alaska, Pacific
 
@@ -776,10 +851,12 @@ Includes:
   - Clouds Forecast charts (03-18HR)
   - Winds/Temperature at altitudes 5000-30000ft (06/12HR)
 - User documents (imported or generated)
-- User database file (`user.db`) entry
-- Subfolders for organization:
+- This version's user manual, after `Help` has been opened (`User Manual`, named with the version). A copy from an older install is removed then
+- User database file (`user.db`) entry, shown with a cover picture
+- Subfolders for organization. `notes/`, `tracks/`, and the FAA folders show a cover picture. A PDF shows its first page.
   - `tracks/` — saved flight tracks (KML files)
   - `notes/` — saved notes screenshots
+  - `AIM/`, `CFR14/` (14 CFR), `Handbooks/`, `ACS/`, and `AC/` — FAA documents from Download. Specialty handbooks are stored in `Handbooks/`.
 
 **Folder management:**
 
@@ -807,6 +884,7 @@ Document behavior:
 - GeoJSON: parsed into map shapes (visible when GeoJSON layer is on)
 - KML: opens Track Viewer with 2D map, altitude profile, and 3D terrain view
 - Images: zoomable preview
+- Internet pictures (WPC, SigWx, and others): tap one to open it full screen. Swipe left or right (or use the left and right arrow keys on a computer) to slide to the previous or next picture in the current filter; the app bar shows `n / total`. Pinch to zoom. While a picture is zoomed in, dragging pans it; zoom back out to swipe again.
 - Share button available where supported (not Linux)
 - Swipe delete for user files (preserves User Data entry)
 
@@ -908,9 +986,9 @@ Speed and distance values follow the app unit setting and are shown without unit
 ![Cruise tab — TAS and fuel-flow estimate at altitude and power setting](assets/docs/screenshots/12_aircraft_cruise.png)
 
 Enter cruise conditions:
-- **Altitude** (ft) — prefilled from the **PLAN** tab **Alt** when you open the Cruise tab (or open Aircraft & Performance); you can still edit it for what-if
+- **Altitude** (ft) — prefilled from the plan default altitude when you open the Cruise tab (or open Aircraft & Performance); you can still edit it for what-if
 - **Temperature deviation** (°C from standard)
-- **Power setting** (%) — remembered between app sessions via **app settings** (same preference store as **ASpd** / **GPH** on the Plan tab), not the aircraft database table
+- **Power setting** (%) — remembered between app sessions in app settings, not the aircraft database table
 
 Below altitude and temperature deviation, the screen shows **density altitude** (ft) for those inputs (read-only).
 
@@ -955,7 +1033,7 @@ Create and manage your saved aircraft profiles:
 
 **Aircraft list**: Tap a row to select that profile for the other tabs. Use the **edit** (pencil) icon to change an existing profile and **Save changes**; use **delete** to remove it from the database.
 
-**Add from template**: Starts a new profile using the currently selected built-in or saved aircraft as a starting point, then **Save aircraft** to store it.
+**Add from template**: Starts a new profile using the currently selected built-in or saved aircraft as a starting point, then **Save aircraft** to store it. A built-in template fills Cruise Speed, Fuel Endurance, Best Glide Speed, Sink Rate, Best Climb Speed, and Best Climb Rate from that airplane's handbook figures. Speeds use the app speed units from onboarding.
 
 **Aircraft Identification:**
 - Tail Number, Type, Wake Turbulence
@@ -974,7 +1052,11 @@ Create and manage your saved aircraft profiles:
 **Glide circle (MAP `Circles` layer):**
 - **Best Glide Speed** — POH best-glide speed of the **selected** aircraft (Performance dropdown). Used instead of current GPS ground speed. Entered in the same speed units as the rest of the app (onboarding unit setting).
 - **Sink Rate** (fpm) — power-off sink rate at best glide
-- If Best Glide Speed is empty, Cruise Speed is used; if that is also empty, 65 is assumed.
+- If Best Glide Speed and Sink Rate are empty, the selected built-in aircraft supplies its handbook best glide and sink rate. If Best Glide Speed is still empty, Cruise Speed is used; if that is also empty, 65 is assumed.
+- **Best Climb Speed** — best-rate-of-climb speed, in the same speed units as the rest of the app. The plan altitude icon uses it to climb and descend
+- **Best Climb Rate** (fpm) — best rate of climb and descent. The plan altitude icon uses it, and time and fuel use the climb speed while the altitude is changing. If either climb field is empty, the selected built-in aircraft supplies its handbook climb speed and rate. If they are still empty, climb uses three quarters of cruise speed and a rate that slows from about 700 ft/min to about 100 ft/min
+
+**Current Aircraft Specs** (under the template button) shows max gross weight, usable fuel, and, for a built-in aircraft, cruise speed, fuel endurance, best glide, sink rate, and best climb.
 
 **Performance Data:**
 - Max Gross Weight, Usable Fuel, Empty Weight
@@ -1011,6 +1093,58 @@ Each checkbox stores the current value with the profile. **Layers**, **Weather**
 - **Save**: stores the checked items under that name. Saving an existing name replaces it.
 - **Profile list**: tap the three-dot menu on a profile and choose **Delete** to remove it. A profile shows the items it will restore under its name.
 - Apply a saved profile from the same `Profiles` list in `MAP → Map Settings` by tapping its name. That list shows the profile name. The `Profiles` heading opens this screen.
+- **Emergency** is a permanent profile at the top of the list. It cannot be saved over, renamed, or deleted. Its tile looks like the others, in red, and shows the checklist in use. Its three-dot menu lists the checklists imported under `MAP → Menu → Check Lists`. `Default` uses a built-in engine-out checklist. Choosing a checklist here changes only the Emergency profile, not the checklist chosen on the `Check Lists` screen.
+
+### 9.4.2 Emergency Mode
+
+Open: **MAP → Map Settings → Profiles → Emergency** (the red entry at the top of the list)
+
+Emergency mode is for an engine failure, a fire, or running out of fuel. It opens a simple map and four cards, A, B, C, and D, that follow the usual emergency steps: **A**viate with best glide speed, pick the best place to land (**B**), run the **C**hecklist, and **D**eclare the emergency.
+
+It is an aid. It does not replace flying the airplane: fly first, then navigate, then communicate.
+
+**The map**
+
+- The map shows the chart you were using, always north up, with ownship at the center and the glide ring around it.
+- It opens at the same zoom as a long-press on `Center`.
+- Pinch or scroll to zoom. The map cannot be panned or rotated, and ownship stays centered.
+- Emergency mode changes none of your settings: layers, weather, chart type, zoom, plan, and your checklist choice all stay as they were. `EXIT`, or the Back button, asks `Exit emergency mode?` with `Yes` and `No`. `No` is the default, and tapping outside the dialog also answers No. `Yes` returns to the map exactly as you left it.
+
+**The aircraft**
+
+The aircraft is the one chosen in the dropdown on `MAP → Menu → Aircraft & Performance`. The glide ring, the glide speed on A, and the landing length that B needs all use that aircraft. If nothing was ever chosen there, the Cessna 172SP is used. Check before a flight that the right aircraft is chosen and has a best glide speed.
+
+**A, top left: best glide speed**
+
+- Shows the best glide speed of the aircraft in your speed units, with your current indicated airspeed under it. Airspeed is estimated from GPS ground speed and the winds aloft.
+- The card flashes red when the airspeed is more than 5 knots from best glide.
+
+**B, top right: best place to land**
+
+- **Which runways count**: any runway at an airport (public or private) whose landing end is inside the glide ring. The far end of the runway can be outside the ring. Helipads, heliports, and seaplane bases are never chosen.
+- **How one is chosen**: among runways at least as long as the aircraft needs to land, B picks the one with the most headwind, and the nearest if tied. The length needed is the landing distance over a 50 ft obstacle at the field's elevation on a standard day, at maximum gross weight, from the aircraft's landing data. If the aircraft has no landing data, length is not checked.
+- **On the map**: a red line runs from ownship to the runway, and a large red outlined arrow at the landing end points the landing direction. The outline lets you see the airport under it.
+- **The card**: airport, runway, length (and the length needed), headwind or tailwind and crosswind, distance, bearing, and landing heading.
+- **Short runway**: if no reachable runway is long enough, B shows the longest one and flashes with `SHORT RUNWAY`.
+- **No runway data**: many fields, private ones especially, publish no usable runway. If no runway is in reach but such an airport is inside the glide ring, B flashes `NO RUNWAY DATA` with that airport. The arrow points into the wind, or straight to the field if there is no wind data.
+- **Nothing in range**: B flashes `No runway identified` and shows an arrow pointing directly into the wind. Without wind data the arrow shows the current track.
+- **Lock**: tap `LOCK` on the B card to hold the current choice so it stops changing as you fly. The distance and bearing keep updating. Tap `LOCKED` to release it and choose again. If a locked runway is no longer inside the glide ring, B flashes and shows `OUTSIDE GLIDE RING`.
+
+**C, bottom right: checklist**
+
+- Shows the emergency checklist one step at a time, as `step/total`. Tap the card for the next step. After the last step it goes back to the first. Swipe right on the card to go back one step (from the first step it goes to the last). Swipe left to go forward.
+- `EXIT` is on this card. It asks for confirmation before leaving.
+- The checklist is the one chosen for the Emergency profile (below), or a built-in engine-out checklist.
+
+**D, bottom left: declare**
+
+- The CTAF or UNICOM frequency of the airport of the runway shown on B, then `121.5` and squawk `7700`.
+
+**Before you need it**
+
+1. Choose your aircraft on `Aircraft & Performance`. Fill in its Best Glide Speed and Sink Rate under `My Aircraft`, and its landing table if you have one.
+2. To use your own checklist, import it under `MAP → Menu → Check Lists`. Open the `Profiles` heading, tap the three dots on the `Emergency` tile, and pick it. `Default` uses the built-in checklist.
+3. Open Emergency mode once on the ground to see the layout, then `EXIT`.
 
 ### 9.5 Log Book
 
@@ -1082,7 +1216,7 @@ Also used for autopilot output of navigation data.
 
 Open: **Menu → Help**
 
-- Opens the User Manual PDF for in-app reference.
+- Copies the User Manual PDF that shipped with this version into `Documents`, then opens it. The app bar says `User Manual`. The file is named with this version, and a copy from an older install is removed at that time.
 - Available on platforms that support PDF viewing (not Linux).
 
 ### 9.8 3D
@@ -1093,16 +1227,40 @@ Open: **Menu → 3D** (under `Write a Note`)
 
 Same view as the destination popup `3D` tab, centered on the aircraft, without the yellow long-press mark.
 
-- **Terrain**: downloaded Elevation tiles, brown, and red within 500 ft of altitude
+- **Terrain**: downloaded Elevation tiles, brown, and red within 500 ft of altitude. Shelf floors sit on that surface instead of extending below it
+- **Airports**: each airport inside 25 NM is a runway diagram on the ground at the field. Pavement matches the AD tab, with the runway numbers at the ends. A surface Class B, C, or D airport still has its name
 - **Traffic**: ADS-B targets inside 25 NM, drawn as dots
-- **Plan**: the active plan at its altitude, cyan behind, purple on the current leg, and grey ahead
+- **North**: a red arrow above the top of the altitude scale points north as the view turns, with an `N` past its head. It is on `3D` and `3D Weather`
+- **Plan**: the active plan at each leg's altitude, cyan behind, purple on the current leg, and grey ahead. The line leaves a departure airport at field elevation and arrives at a destination airport at field elevation
 - **Glide ring**: the map glide circle on the surface, and a cone from the aircraft down to it
-- **TFR**: when the `TFR` layer is on, red if in effect and brown if later, from the published floor to the published ceiling
-- **Game TFR**: when that layer is on, an orange 3 NM cylinder from the surface to 3000 ft above the ground
-- **Filters**: `B`, `C`, `D`, `SUA`, `TFR`, `Game`, `Plan`, `Obstacles`, and `Terrain` show or hide those parts. `SUA` is restricted, warning, prohibited, and MOA. `TFR` and `Game` still follow the map layers
+- **TFR**: when the `TFR` filter is on, red if in effect and brown if later. `AGL` is height above the terrain, and the picture grows to include that ground. `MSL` is a fixed altitude, and the floor still sits on the ground when the terrain is higher. A floor above the picture, such as 15,000–17,999 ft MSL, is a dashed outline at the top of the scale with arrows pointing up. The map marker text uses the same `AGL` or `MSL` label
+- **Game TFR**: when the `Game` filter is on, an orange 3 NM cylinder from the surface to 3000 ft above the ground
+- **Filters**: `B`, `C`, `D`, `SUA`, `TFR`, `Game`, `Plan`, `Obstacles`, and `Terrain` show or hide those parts. `SUA` is restricted, warning, prohibited, and MOA. The filters alone decide what is drawn. The map layer settings do not affect this view
+- **Build Lightning**: flashes from the last 10 minutes, from the GOES lightning mapper (GOES-East east of 105°W, GOES-West west of it). Each flash is a bright jagged bolt standing on the ground. The mapper reports where and when, not how high, so every bolt is drawn up to 15,000 ft or the top of the box. Newest flashes are white, then yellow, then orange as they age. The key at the top right shows the satellite, the flash count, and `Built 1542Z  rebuild in 7 min`. A build downloads about 30 small files, around 6 MB, and is good for 10 minutes like radar
+- **Build Icing**: the NOAA in-flight icing forecast (IFI), from the 3 km hourly grid, every 1000 ft from 1,000 to 30,000 ft within 60 NM. The key shows the forecast hour (`NOAA IFI  valid 1500Z`). Colors: pale teal is trace, teal is light, violet is moderate, and magenta is heavy. The `Ice` menu next to it sets the weakest severity shown: `Trace+`, `Light+` (the default), or `Moderate+`. A build downloads only those altitudes, a few MB, and is good for 60 minutes because the forecast is hourly
+- **Build Turbulence**: the NOAA graphical turbulence guidance (GTG), the eddy dissipation rate (EDR) at 11 altitudes from 1,000 to 30,000 ft, blended between them, within 60 NM. Contiguous US only. The key shows the forecast hour (`NOAA GTG  valid 1500Z`). Colors: amber is light (EDR 0.15), orange is moderate (0.30), and dark red is severe (0.50). The `Turb` menu sets the weakest level shown, `Light+` (the default), `Moderate+`, or `Severe+`. The thresholds are for a medium airliner, so a small aircraft feels the same EDR more strongly. A build downloads about 10 MB, so use Wi-Fi, and is good for 60 minutes
+- **Rebuild**: when a build runs out, its layer hides, its button changes to `Rebuild Lightning`, `Rebuild Icing`, or `Rebuild Turbulence`, and a red note says it is old. Pressing a build button always downloads fresh data. If a layer cannot load, the note says why. Icing and turbulence are for the continental US only
 - **Drag** to rotate, **pinch** to zoom, **two fingers** to pan
 - **Reset** restores the view
 - Shelf colors, altitude labels, obstacles, and the ownship dot match the destination `3D` tab (Section 5.3)
+
+### 9.8.1 3D Weather
+
+Open: **Menu → 3D Weather** (under `3D`), or the destination popup `3DW` tab (after `3D`, before `ST`)
+
+The same 3D box as `3D`, for weather instead of airspace. It shows the terrain, the runway diagrams, the aircraft, the winds aloft, and four layers you build when you want them: 3D NEXRAD radar, lightning, icing, and turbulence. It has no airspace shelves, SUA, TFRs, plan, obstacles, glide ring, or traffic. The menu screen follows the aircraft. The popup tab is centered on that place, with the yellow long-press mark. The box is at least 12,000 ft tall. It grows to hold storm tops when radar is on, and icing or turbulence up to 18,000 ft. Higher cells are clipped.
+
+- **Buttons**: a column down the left side, one button per row. A layer's setting menu (`dBZ`, `Ice`, `Turb`) sits indented under its button. The column scrolls when the screen is short
+- **Terrain**: plain brown shading by height. Unlike `3D`, it is not turned red by the aircraft's altitude
+- **Winds aloft**: on as soon as the screen opens. The `Hide Wind` button at the top of the left column hides the arrows and their key, and `Show Wind` brings them back. Winds inside 25 NM, drawn at their altitude and not under the terrain, from the 6-hour forecast. The arrow points downwind. The `Winds aloft` key at the bottom right shows the colors: blue is light wind, then cyan, green, yellow, and orange, and red is 60 kt or more
+- **Build NEXRAD**: turns on 3D radar from the nearest WSR-88D radar. Nothing is downloaded until you press it. The button shows `Building 2/5` while it loads, and then `Hide NEXRAD`. Press it again to hide the radar
+- **10-minute life**: the radar keeps the time it was built. The NEXRAD key shows `Built 1542Z  rebuild in 7 min`. Ten minutes after the build the radar hides, and the button changes to `Rebuild NEXRAD` with a red note, `NEXRAD is 10 min old. Rebuild for current radar.` Press it to download the newest scans and build again
+- **dBZ**: sets the weakest echo shown, 10, 20, 30, 40, or 50 dBZ. The setting is kept between openings
+- **NEXRAD key**: at the top left, with the radar, the scan time in UTC, and how many minutes it is behind the newest scan. The color bar runs from 10 to 70 dBZ, from light blue and green for rain to yellow, orange, and red for heavy rain, and pink for the strongest echoes
+- **Loop**: the radar plays the last 30 minutes, one frame per radar scan (every 4 to 10 minutes), and rests on the newest frame before it starts over. The pause button stops it, and the slider steps to a frame
+- **Radar data**: needs an internet connection. The first build downloads the last 30 minutes of scans from NOAA, usually 3 to 15 MB each, newest first, so use Wi-Fi when you can. The radar is a snapshot and does not update itself. A second radar fills in the gap above the antenna when you are close to the first. A radar sees up to about 230 NM away. A radar that is offline for 90 minutes is skipped, and a scan that stops at a low tilt can leave a gap overhead or at the top of a tall storm
+- **Drag** to rotate, **pinch** to zoom, **two fingers** to pan
+- **Reset** restores the view
 
 ### 9.9 PFD
 
@@ -1248,7 +1406,7 @@ Powered by Gemini 3.8 Flash with Google Search integration.
 Capabilities:
 
 - Ask free-form aviation/trip questions (internet required)
-- Question must be 256 characters or less
+- Question must be 2048 characters or less
 - Context limit: 10,000 tokens
 
 **Context toggles** (tap to highlight, highlighted context sent with question):
@@ -1475,9 +1633,12 @@ diagram using its business selector — see Section 6.6.
 
 On iOS, Android, Windows, and macOS, AvareX checks for a message from Apps4Av when you open the app and again when you bring it back to the foreground. If one is waiting, a popup shows its title and text. No account is required. These messages are separate from the Community reply notifications in Section 11.4.
 
-- **OK**: dismisses the message on this device. It stays dismissed until Apps4Av publishes a new message or updates that one.
-- A web address, when the message includes one, appears under the text. Select it to copy.
-- Nothing appears when there is no current message. A message that has already expired is not shown.
+Each current message is also kept on this device. Open `MAP → Menu → Messages`. The list stays until you delete a message. Swipe a row left to delete it on this device. Deleting does not change the message Apps4Av published.
+
+- **OK**: closes the popup. The message stays in `Messages`.
+- Select the title, the text, or the web address to copy. A web address, when the message includes one, appears under the text.
+- An update from Apps4Av shows the popup again and replaces the saved copy.
+- Nothing new appears in the popup when you have already tapped `OK`. A message that has expired is not shown in the popup. One already saved stays in `Messages` until you delete it.
 
 ---
 
@@ -1507,7 +1668,7 @@ This is the most common cause of "AvareX traffic doesn't work" on iPhone/iPad an
 
 ## 13) Data Lifecycle and Auto-Update Behavior
 
-- On reaching the onboarding **Databases and Maps** page, AvareX automatically downloads the **DatabasesX** package plus the **Sectional**, **Plates**, and **CSUP** for your current GPS region whenever any of them are missing/expired (skips items already current).
+- On reaching the onboarding **Databases and Maps** page, AvareX automatically downloads the **DatabasesX** package plus the **Sectional**, **Plates**, **CSUP**, and **Elevation** for your current GPS region whenever any of them are missing/expired (skips items already current).
 - Weather downloads refresh periodically (10-minute cycle in storage timer).
 - GPS source modes (tap `SRC` tile to cycle):
   - **Auto**: Prefers external GPS when available, falls back to internal after 30s timeout. Shows `Internal-A` or `External-A`.
@@ -1538,19 +1699,27 @@ This is the most common cause of "AvareX traffic doesn't work" on iPhone/iPad an
 | Show recent ATC routes | `PLAN → Create → Show IFR ATC Routes` |
 | Send plan to / get plan from Avidyne IFD (Wi-Fi) | `PLAN → Transfer` |
 | Destination details | Long-press on map or tap FIND result |
-| 3D Class B/C/D, restricted, warning, prohibited, and MOA airspace, plus obstacles | Destination popup `3D` tab (after `Wind`, before `ST`) |
-| 3D airspace around the aircraft, with terrain and ADS-B traffic | `MAP → Menu → 3D` (under `Write a Note`) |
+| 3D Class B/C/D, restricted, warning, prohibited, and MOA airspace, plus obstacles and runway diagrams | Destination popup `3D` tab (after `Wind`, before `ST`) |
+| 3D winds aloft, NEXRAD radar, lightning, icing, and turbulence, with terrain and runway diagrams | Destination popup `3DW` tab (after `3D`, before `ST`) |
+| 3D airspace around the aircraft, with terrain, runway diagrams, and ADS-B traffic | `MAP → Menu → 3D` (under `Write a Note`) |
+| 3D winds aloft, NEXRAD radar, lightning, icing, and turbulence around the aircraft | `MAP → Menu → 3D Weather` (under `3D`) |
 | PFD on its own screen | `MAP → Menu → PFD` (under `3D`) |
 | Draw a holding pattern | Long-press a fix or navaid → `Main` → `Hold` → `Draw on Map` |
 | Show plates for airport | Destination popup `Plates` or `PLATE tab` |
+| Sync plates to the active airport | `PLATE` airport diagram → sync icon |
+| Airport diagram after landing | `PLATE` airport diagram → landing icon |
 | Get airport satellite view | `PLATE tab → Plate selector → APS-AERIAL VIEW (Get)` |
 | Delete airport satellite view | `PLATE tab → Plate selector → APS-AERIAL VIEW → trash icon` |
 | Configure aircraft | `MAP → Menu → Aircraft & Performance → My Aircraft tab` |
 | Set best glide / sink rate | `MAP → Menu → Aircraft & Performance → My Aircraft tab` (Best Glide Speed, Sink Rate) |
+| Set best climb speed and rate | `MAP → Menu → Aircraft & Performance → My Aircraft tab` (Best Climb Speed, Best Climb Rate) |
+| Best cruise altitude | `PLAN tab` → altitude icon (next to the forecast dropdown) |
 | Change aircraft map icon | `MAP → Menu → Aircraft & Performance → My Aircraft tab → icon dropdown` |
 | Checklist operations | `MAP → Menu → Check Lists` |
 | Save map settings as a profile | `MAP → Map Settings → Profiles` |
 | Apply a saved profile | `MAP → Map Settings → Profiles` |
+| Emergency mode (glide speed, best runway, checklist, declare) | `MAP → Map Settings → Profiles → Emergency` |
+| Choose the Emergency checklist | `MAP → Map Settings → Profiles` heading → `Emergency` tile three-dot menu |
 | Weight and balance | `MAP → Menu → Aircraft & Performance → W&B tab` |
 | Takeoff performance | `MAP → Menu → Aircraft & Performance → Takeoff tab` (fixed-wing icon only; hidden for helicopter) |
 | Landing performance | `MAP → Menu → Aircraft & Performance → Landing tab` (fixed-wing icon only; hidden for helicopter) |
@@ -1581,7 +1750,7 @@ This is the most common cause of "AvareX traffic doesn't work" on iPhone/iPad an
 | Load a shared flight plan into PLAN | `Community → group → tap Load on a post with a route` |
 | Reply to a topic | `Community → group → tap topic → Reply` |
 | View a topic's discussion thread | `Community → group → tap a topic in the Feed` |
-| Apps4Av message | Shown automatically when you open the app (iOS, Android, Windows, macOS). Tap `OK` |
+| Apps4Av message | Shown automatically when you open the app (iOS, Android, Windows, macOS). Tap `OK`. Read again at `MAP → Menu → Messages` |
 | View notifications | `Community → bell icon` (also shown on the `Community` row in the drawer's `INTERNET` section) |
 | Turn reply notifications off / mute a group | `Community → bell icon → gear icon` |
 | Aircraft Scheduler | `MAP → Menu → Internet → Scheduler` |
@@ -1607,6 +1776,7 @@ This is the most common cause of "AvareX traffic doesn't work" on iPhone/iPad an
 | PFD terrain and synthetic runway | `MAP → Layers → PFD > 0` (Elevation charts for terrain; runway when lined up within 10 NM) |
 | Set an OBS course | `MAP → PFD → hold an OBS knob` (double-tap either knob to return to the GPS course) |
 | Enable Game TFR overlay | `MAP → Layers → Game TFR slider > 0` |
+| Enable Cameras overlay | `MAP → Layers → Cameras slider > 0` (zoom to level 10+, tap a camera icon) |
 | CAP Grid overlay | `MAP → Layers → Nav > 0 → CAP Grid slider > 0` (zoom to level 9+) |
 | Enable wind vectors | `MAP → Layers → Weather > 0 → Wind Vectors > 0` (use altitude slider) |
 | Enable ceiling overlay | `MAP → Layers → Weather > 0 → Ceiling > 0` (use altitude slider) |
@@ -1615,7 +1785,7 @@ This is the most common cause of "AvareX traffic doesn't work" on iPhone/iPad an
 | Measure distances | `MAP → Map Settings → Measure Distance Off → long-press map to add points` |
 | Rubber band waypoints | `MAP → Map Settings → Rubber Banding Off → long-press and drag waypoints` |
 | Mute audible alerts | `MAP → Map Settings → Audible Alerts On` (label flips to `Audible Alerts Off`) |
-| North-up / track-up orientation | `MAP → Map Settings → North Up / Track Up` |
+| North-up / track-up orientation | Tap the `MT` tile, or `MAP → Map Settings → North Up / Track Up` (olive tile = track up) |
 | Insert waypoint at position | `PLAN → long-press waypoint row → FIND → select destination` |
 | View winds & terrain analysis | `PLAN → analytics icon → tap diagram for details` |
 
@@ -1714,10 +1884,9 @@ There are three ways to add a waypoint to the plan; the fastest for a brand-new 
 
 6. Verify the totals header (Dist 148, GSpd 91, Time 01:55, Fuel 18.6 in the example).
 7. Adjust the bottom controls as needed:
-   - **ASpd** — true airspeed in knots (or mph if Imperial units)
-   - **GPH** — fuel burn (gallons per hour)
-   - **Alt** — planned altitude (feet)
-   - **Aircraft icon** — auto-fills `ASpd` and `GPH` from your selected aircraft's Performance data at the chosen `Alt`
+   - Cruise speed and fuel flow come from the selected aircraft, read once when PLAN opens
+   - Each waypoint **Alt** column is the altitude reached at that waypoint while the airplane is still climbing. After it levels off, Alt stays on that cruise altitude. A short leg keeps climbing on the next leg. Clear it to use the plan default (3000 ft, or the map altitude slider)
+   - **Altitude icon** — next to the forecast dropdown. Picks the fastest altitude for the rest of the route, at least 1,000 ft above the terrain in the next 50 miles. A climb waits 50 miles, and a descent can begin 20 miles after the airplane is at that altitude. Climb and descent use best climb speed and rate, and time and fuel use climb speed while the altitude is changing. A short leg shows the altitude reached there. Odd and even thousands follow the course from the first waypoint to the last
    - **Forecast horizon** — `06H / 12H / 24H` (winds aloft window for nav-log calculations)
 8. To **reorder** legs: long-press and drag rows. To **set a different leg active**, tap its row. To **delete** a leg, swipe right-to-left.
 9. To **save** the plan: tap **Load & Save** at the bottom → press **Save** and give it a name.
@@ -1784,7 +1953,7 @@ Prereq: set your 1800wxbrief-compatible email in onboarding.
 2. Select airport (bottom-right selector).
 3. Select desired plate (bottom-left selector, color-coded by type).
 4. Use procedure menu (plus/road icon):
-   - Choose a procedure to show its profile card, draw the **CIFP route** on georeferenced plates (green→yellow→brown→blue→red→orange from final back, matched on the vertical profile), and append it to the plan.
+   - Choose a procedure to show its profile card, draw the **CIFP route** on georeferenced plates (green→yellow→brown→blue→red→orange from final back, matched on the vertical profile), and append it to the plan. Each fix that has an altitude on that profile gets that altitude in the plan **Alt** column.
 5. If other IAFs exist for the same chart, tap a **black IAF chip** to switch transition (route and profile update; plan is not duplicated).
 6. Fly the approach using the colored route overlay and vertical profile.
 7. Keep instruments visible on plate using top-right show/hide toggle.
@@ -1927,7 +2096,7 @@ The **FIND** tab is the fastest way to locate any airport, navaid, fix, or proce
    - **+Plan** insert into the current plan after the active waypoint
    - **Hold** beside the name and type on the Main tab of a fix or navaid opens the holding-pattern dialog
    - **↓Plan** append to the end of the plan
-   - **Plates** (airports) jump to PLATE tab at this airport
+   - **Plates** (airports) jump to the PLATE tab for that airport, even when it is not the active waypoint
 
 ---
 
@@ -1955,12 +2124,12 @@ The navigation log gives you per-leg headings, magnetic variation, wind correcti
 1. Open the **PLAN** tab.
 2. Ensure your route has at least 2 waypoints (build one with **UC-04** if needed).
 
-![Step 3 — bottom row of the PLAN tab; the **analytics** icon (graph) at the far right opens the Navigation Log](assets/docs/screenshots/22_plan_with_route.png)
+![Step 3 — PLAN settings row; the **analytics** icon (graph) to the right of the altitude icon opens the Navigation Log](assets/docs/screenshots/22_plan_with_route.png)
 
-3. Set your planned altitude using the **Alt** field at the bottom.
+3. Set each leg's altitude in the **Alt** column. An empty cell uses the plan default (3000 ft, or the map altitude slider).
 4. Set the **Forecast horizon** dropdown (`06H / 12H / 24H`) so wind data matches your departure window.
-5. (Optional) Tap the **Aircraft icon** next to **Alt** to load TAS/GPH from your stored aircraft profile.
-6. Tap the **analytics icon** (graph, far right of the bottom row, tooltip *"Navigation log and terrain"*). The **Navigation Log** opens as a full-screen dialog.
+5. Cruise speed and fuel flow are read once from the selected aircraft when PLAN opens.
+6. Tap the **analytics icon** (graph, to the right of the altitude icon, tooltip *"Navigation log and terrain"*). The **Navigation Log** opens as a full-screen dialog.
 
 ![Navigation Log — per-leg grid (top) and Winds & Terrain En Route diagram (bottom)](assets/docs/screenshots/23_plan_navlog.png)
 
@@ -1970,7 +2139,7 @@ The navigation log gives you per-leg headings, magnetic variation, wind correcti
    |-----|---------|
    | **FM** | From waypoint |
    | **TO** | To waypoint |
-   | **AL** | Plan altitude (ft) |
+   | **AL** | Cruise altitude for that leg (ft). A waypoint **Alt** when set, otherwise the plan **Alt** |
    | **TC** | True course (°) |
    | **VR** | Magnetic variation (°) |
    | **MC** | Magnetic course (°) |
@@ -1990,8 +2159,8 @@ The navigation log gives you per-leg headings, magnetic variation, wind correcti
    - Y-axis: altitude bands (0, 3000, 6000, 9000, 12000, 18000 ft)
    - X-axis: position along the route from departure (left) to destination (right)
    - **Wind heat map**: each cell colored by tailwind/headwind component — **green = tailwind**, **red = headwind** (darker = lighter winds, brighter = stronger winds, scaled up to 50 kt)
-   - **Cyan horizontal line**: your planned altitude (`Alt` from the PLAN tab)
-   - **Green/red terrain curve**: terrain elevation; green where it's safely below your plan altitude, red where it's at or above your plan altitude
+   - **Cyan altitude line**: the altitude flown. After the altitude icon runs, it climbs and descends at best climb speed and rate and ends at the arrival field elevation
+   - **Green/red terrain curve**: terrain elevation; green where it is below that leg's altitude, red where it is at or above it
    - **Cyan tick marks** along the bottom edge: waypoint positions
 9. **Tap anywhere on the diagram** to display a tooltip showing:
    - Nearest waypoint (only if your tap is within ~5% of that waypoint's position)
@@ -2093,6 +2262,16 @@ The navigation log gives you per-leg headings, magnetic variation, wind correcti
 4. Build or change the plan on the master, and tap the waypoint to fly. Each slave loads that plan and sets the same active waypoint, including the current fix on an airway or procedure.
 5. Open **Messages** on either device to see the JSON sent (**TX**) and received (**RX**). Tap a row to read it.
 6. Tap **Off** on a device to stop following, or to stop sending.
+
+### UC-28: Use Emergency mode
+
+1. Before the flight, choose your aircraft on `Aircraft & Performance` and, if you want your own checklist, pick it on the `Emergency` tile (`Profiles` heading, three-dot menu).
+2. If the engine quits, catches fire, or runs out of fuel, fly the airplane first. Then open `MAP → Map Settings → Profiles → Emergency`.
+3. Read **A** and fly the best glide speed. The card flashes if you are more than 5 knots away.
+4. Read **B**: it shows the runway to glide to, with the red arrow on the map for the landing direction. Tap `LOCK` once you have decided, so it stops changing.
+5. Work through **C**, tapping the card for each next step.
+6. Use **D** to call on the CTAF or UNICOM shown, or on `121.5`, and set the transponder to `7700`.
+7. Tap `EXIT` and confirm to return to the normal map.
 
 ---
 
