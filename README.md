@@ -82,7 +82,7 @@ scheduler, AI) are inert without them; all core EFB features work.
 
 This branch also includes the `ble-adsb` feature: traffic/ownship/FIS-B
 over Bluetooth LE GATT instead of WiFi, so your tablet's WiFi stays free
-for a phone hotspot, and iOS/iPadOS work too (Bluetooth SPP never did).
+for a phone/starlink/leo hotspot, and iOS/iPadOS work too (Bluetooth SPP never did).
 Interface spec: [docs/BLE_ADSB_SERVICE.md](docs/BLE_ADSB_SERVICE.md).
 
 Target receivers:
@@ -93,33 +93,19 @@ Target receivers:
   typed GDL90 characteristics, FIS-B uplink fragmentation (hello
   [CIFIB](https://cifib.ca)), and the full AT command console over BLE so
   any serial terminal app can configure it wirelessly.
-- **cb-tfc** — MIT-licensed firmware turning a [Seeed SenseCAP MeshTracker
+- **cb-tfc** — MIT-licensed firmware turning a $50 [Seeed SenseCAP MeshTracker
   X1](https://www.seeedstudio.com/) (nRF52840 + Semtech LR2021) into a
   see-and-be-seen traffic device: 1090ES ADS-B and FANET on 915 MHz on the
   one radio, time-sliced against GPS, both arriving over the same BLE
   service. It transmits its own position on FANET, so two of them see each
   other. **Currently in flight testing**; not published yet.
-- **[SoftRF Card Edition MkIII](https://github.com/lyusupov/SoftRF/wiki/Card-Edition-MkIII)**
-  (~US$42) — LoRa radio covering FANET/OGN glider and paraglider traffic;
-  connects as a second BLE receiver alongside the ADSBee (set it to
-  Bluetooth LE + GDL90 output).
 
 In development: a board carrying **1090ES, 978 UAT and 915 MHz together**,
-built around the ADSBee m1421 module — its LR2021 takes 1090 while the
-CC1314's own sub-GHz radio takes 978, including TIS-B and FIS-B, which
-matters north of the border only near a US ground station but matters a
-great deal south of it.
-
-The "$42 TCAS" plan: 1090ES plus FANET feeding one merged BLE traffic
-picture in AvareX — transponder traffic, gliders, and paragliders on one
-moving map over Canadian charts and airspace, no WiFi juggling, for less
-than a fill-up. (It is, of course, not TCAS: unofficial data, no
-resolution advisories, not for navigation — it's extra eyes, not a
-certified system.)
-
-Note: on the ADSBee 1090U, BLE mode and WiFi mode are mutually exclusive
-(the ESP32-S3 module lacks the RAM to run both radios' stacks); switch
-modes with `AT+WIFI_AP` over USB or the BLE console.
+built around the ADSBee m1421 module — listening on 1090 and 978MHz 
+including TIS-B and FIS-B and a LR2021 doing tx/rx FANET on 915Mhz. Processor is
+a ESP32S3 so WiFi/BL/BLE GLD90 feeds, RS232, USB, LiPo, 12V power, GPS, IMU.
+Baically the funtionality of a Stratux + FANET over LoRa in a compact, power 
+efficient 70x70mm footprint. 
 
 ## User Manual
 
