@@ -6,6 +6,7 @@ import 'package:avaremp/destination/destination.dart';
 import 'package:avaremp/instruments/pfd_runway.dart';
 import 'package:avaremp/instruments/precision_approach.dart';
 import 'package:avaremp/instruments/runway_survey.dart';
+import 'package:avaremp/io/glasses_hud_screen.dart';
 import 'package:avaremp/io/gps_fix.dart';
 import 'package:avaremp/storage.dart';
 import 'package:avaremp/utils/geo_calculations.dart';
@@ -98,6 +99,24 @@ class _PrecisionApproachScreenState extends State<PrecisionApproachScreen> {
             tooltip: "Surveyed runways",
             onPressed: _showSurveys,
             icon: const Icon(Icons.straighten),
+          ),
+          // The same guidance on a pair of smartglasses, so it is in the
+          // windscreen instead of on the yoke.
+          ValueListenableBuilder<int>(
+            valueListenable: Storage().glassesHud.change,
+            builder: (c, _, __) => IconButton(
+              tooltip: Storage().glassesHud.isConnected
+                  ? "HUD glasses connected"
+                  : "Show on smartglasses",
+              onPressed: () => GlassesHudSheet.show(context),
+              icon: Icon(
+                  Storage().glassesHud.isConnected
+                      ? Icons.visibility
+                      : Icons.visibility_outlined,
+                  color: Storage().glassesHud.isConnected
+                      ? Colors.greenAccent
+                      : null),
+            ),
           ),
           IconButton(
             tooltip: "Settings",
@@ -286,6 +305,7 @@ class _PrecisionApproachScreenState extends State<PrecisionApproachScreen> {
                       setState(() {
                         _auto = true;
                         Storage().settings.setApproachAuto(true);
+                        Storage().glassesHud.manualRunway = null;
                       });
                       Navigator.pop(ctx);
                     },
@@ -351,6 +371,7 @@ class _PrecisionApproachScreenState extends State<PrecisionApproachScreen> {
         _manual = choice;
         _auto = false;
         Storage().settings.setApproachAuto(false);
+        Storage().glassesHud.manualRunway = choice;
       });
     }
   }

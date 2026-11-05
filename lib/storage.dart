@@ -60,6 +60,7 @@ import 'package:avaremp/canada/canada_airspace.dart';
 import 'package:avaremp/canada/canada_import.dart';
 import 'package:avaremp/canada/canada_registry.dart';
 import 'package:avaremp/io/ble_receiver.dart';
+import 'package:avaremp/io/glasses_hud.dart';
 import 'package:avaremp/io/reception_logger.dart';
 import 'utils/geojson_parser.dart';
 import 'io/gps.dart';
@@ -145,6 +146,9 @@ class Storage {
   /// receiver code is unchanged.
   AircraftRegistry get aircraftRegistry => canadaRegistry;
   final BleReceiver bleReceiver = BleReceiver();
+  /// Precision Approach guidance on a pair of smartglasses. Idle until a pair
+  /// is connected from the approach screen.
+  final GlassesHud glassesHud = GlassesHud();
   final ReceptionLogger receptionLogger = ReceptionLogger();
   List<bool> activeChecklistSteps = [];
   String activeChecklistName = "";
