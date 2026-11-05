@@ -77,6 +77,12 @@ class GlassesHud {
   int _sent = 0;
   int _failed = 0;
 
+  /// The last banner and when it went out. A banner is a fixed string, and
+  /// resending "NO GPS" ten times a second spends the link on nothing.
+  String _banner = "";
+  DateTime _bannerSent = DateTime.fromMillisecondsSinceEpoch(0);
+  static const Duration bannerRepeat = Duration(seconds: 1);
+
   bool get isConnected => _write != null;
   String get deviceName =>
       _device?.platformName.isNotEmpty == true
@@ -313,8 +319,18 @@ class GlassesHud {
     }
   }
 
-  Future<void> _sendBanner(String text) =>
-      _sendState(PpaHudMessage.banner(text));
+  /// The plugin holds the banner until a state message replaces it, so this
+  /// repeats only slowly - often enough that a reconnected pair of glasses
+  /// picks the text up, rarely enough to leave the link idle.
+  Future<void> _sendBanner(String text) async {
+    final DateTime now = DateTime.now();
+    if(text == _banner && now.difference(_bannerSent) < bannerRepeat) {
+      return;
+    }
+    _banner = text;
+    _bannerSent = now;
+    await _sendState(PpaHudMessage.banner(text));
+  }
 
   /// The runway being flown: the approach screen's choice if it made one,
   /// otherwise whatever the PFD has selected.
@@ -348,6 +364,7 @@ class GlassesHud {
       _sendBanner("NO RUNWAY");
       return;
     }
+    _banner = "";
     _sendState(PpaHudMessage.fromGuidance(
         ApproachGuidance.compute(runway, fix, _settings)));
   }
