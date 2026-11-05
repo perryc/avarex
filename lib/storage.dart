@@ -55,6 +55,7 @@ import 'package:avaremp/destination/destination.dart';
 import 'chart/download_manager.dart';
 import 'instruments/flight_timer.dart';
 import 'gdl90/message.dart';
+import 'package:avaremp/io/glasses_hud.dart';
 import 'utils/geojson_parser.dart';
 import 'io/gps.dart';
 import 'instruments/runway_survey.dart';
@@ -129,6 +130,9 @@ class Storage {
   late UnitConversion units;
   final DownloadManager downloadManager = DownloadManager();
   final GeoJsonParser geoParser = GeoJsonParser();
+  /// Precision Approach guidance on a pair of smartglasses. Idle until a pair
+  /// is connected from the approach screen.
+  final GlassesHud glassesHud = GlassesHud();
   List<bool> activeChecklistSteps = [];
   String activeChecklistName = "";
   static const gpsSwitchoverTimeMs = 30000; // switch GPS in 30 seconds
