@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:avaremp/data/main_database_helper.dart';
 import 'package:avaremp/destination/destination.dart';
 import 'package:avaremp/instruments/pfd_painter.dart';
+import 'package:avaremp/instruments/runway_survey.dart';
 import 'package:avaremp/storage.dart';
 import 'package:avaremp/utils/geo_calculations.dart';
 import 'package:geolocator/geolocator.dart';
@@ -186,8 +187,9 @@ class PfdRunwaySelector {
 
   PfdRunwayEnd? get selected => _selected;
 
-  /// Reload candidate airports. Call from [Area.update].
-  Future<void> loadAirports(Destination? closest) async {
+  /// Reload candidate airports. Call from [Area.update]. [near] adds any
+  /// RTK-surveyed strips within range even when the database lacks them.
+  Future<void> loadAirports(Destination? closest, {LatLng? near}) async {
     final Set<String> ids = {};
     final String? c = closest?.locationID;
     if (c != null && c.isNotEmpty) ids.add(c);
@@ -204,12 +206,47 @@ class PfdRunwaySelector {
         }
       }
       final AirportDestination? ap = _airports[id];
-      if (ap != null) out.addAll(PfdRunwayParser.parse(ap));
+      if (ap != null) out.addAll(withSurveys(PfdRunwayParser.parse(ap), RunwaySurveyStore().forAirport(id)));
+    }
+    if (near != null) {
+      for (final SurveyedRunway sr in RunwaySurveyStore().near(near, maxRangeNm * 1.5)) {
+        if (ids.contains(sr.airport)) continue; // already merged above
+        out.addAll(sr.toRunwayEnds());
+      }
     }
     // Keep the cache bounded to the airports in play.
     _airports.removeWhere((k, _) => !ids.contains(k));
     _candidates = out;
   }
+
+  /// Database runway ends with surveyed ones substituted where the idents
+  /// match, plus surveyed runways the database does not list.
+  static List<PfdRunwayEnd> withSurveys(List<PfdRunwayEnd> db, List<SurveyedRunway> surveys) {
+    if (surveys.isEmpty) return db;
+    final List<PfdRunwayEnd> out = [];
+    final Set<String> used = {};
+    for (final rw in db) {
+      SurveyedRunway? match;
+      for (final sr in surveys) {
+        if (sr.matchesIdents(rw.ident, rw.farIdent)) {
+          match = sr;
+          break;
+        }
+      }
+      if (match == null) {
+        out.add(rw);
+      } else if (used.add(match.key)) {
+        out.addAll(match.toRunwayEnds());
+      }
+    }
+    for (final sr in surveys) {
+      if (used.add(sr.key)) out.addAll(sr.toRunwayEnds());
+    }
+    return out;
+  }
+
+  /// All runway ends currently considered (for manual selection).
+  List<PfdRunwayEnd> get candidates => List.unmodifiable(_candidates);
 
   /// Select the best runway end for the current position / track, 1 Hz.
   void update(Position position) {

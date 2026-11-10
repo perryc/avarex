@@ -85,6 +85,11 @@ class GpsKalman {
       return;
     }
     _predictTo(t);
+    if (_jumped(measurement, t)) {
+      // the source changed or the first fix was garbage: snap, do not glide
+      _init(measurement);
+      return;
+    }
     _correct(measurement);
     _lastMeasurementTime = t;
     _lastPredictTime = t;
@@ -98,6 +103,18 @@ class GpsKalman {
     }
     _predictTo(now ?? DateTime.now());
     return _toPosition(raw, now ?? DateTime.now());
+  }
+
+  /// True when [p] is implausibly far from the predicted state: beyond what
+  /// the filtered speed could cover since the last fix, with a 2 km floor.
+  bool _jumped(Position p, DateTime t) {
+    final double n = (p.latitude - _lat0) * _mPerDegLat - _x[_iN];
+    final double e = (p.longitude - _lon0) * _mPerDegLon - _x[_iE];
+    final double dist = sqrt(n * n + e * e);
+    final double dt = _lastMeasurementTime == null
+        ? 0 : t.difference(_lastMeasurementTime!).inMilliseconds / 1000.0;
+    final double allowed = 2000 + 5 * max(_speed, max(0, p.speed)) * max(dt, 1);
+    return dist > allowed;
   }
 
   static bool _invalidFix(Position p) {

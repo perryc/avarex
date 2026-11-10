@@ -25,6 +25,8 @@ Position _fix({
 }
 
 void main() {
+  _jumpTests();
+
   const double lat0 = 40.0;
   const double lon0 = -75.0;
   const double mPerDegLat = 111320.0;
@@ -248,5 +250,22 @@ void main() {
       ));
       expect(k.initialized, isFalse);
     });
+  });
+}
+
+// fork: a far-off measurement re-initialises instead of gliding there
+void _jumpTests() {
+  test("kalman snaps to a distant fix instead of converging slowly", () {
+    final k = GpsKalman();
+    final t0 = DateTime(2026, 1, 1, 12, 0, 0);
+    Position at(double lat, double lon, int s) => Position(
+        latitude: lat, longitude: lon, timestamp: t0.add(Duration(seconds: s)),
+        accuracy: 5, altitude: 600, altitudeAccuracy: 5, heading: 90,
+        headingAccuracy: 5, speed: 0, speedAccuracy: 1);
+    k.update(at(50.0, -104.0, 0));   // bogus first fix
+    k.update(at(50.0, -104.0, 1));
+    final Position out = k.apply(at(50.44, -104.54, 2), now: t0.add(const Duration(seconds: 2)));
+    expect(out.latitude, closeTo(50.44, 0.001));
+    expect(out.longitude, closeTo(-104.54, 0.001));
   });
 }

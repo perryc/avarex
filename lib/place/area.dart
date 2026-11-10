@@ -41,7 +41,7 @@ class Area {
       closestAirport = d[0];
     }
     // candidate runways for the PFD synthetic runway
-    await _pfdRunway.loadAirports(closestAirport);
+    await _pfdRunway.loadAirports(closestAirport, near: Gps.toLatLng(position));
 
     final List<String> layers = Storage().settings.getLayers();
     final List<double> layersOpacity = Storage().settings.getLayersOpacity();
@@ -108,6 +108,8 @@ class Area {
   void updatePfdRunway() {
     _pfdRunway.update(Storage().position);
   }
+
+  PfdRunwaySelector get pfdRunwaySelector => _pfdRunway;
 
   /// Sample elevation tiles for the PFD terrain mesh. 1 Hz, non-blocking.
   Future<void> updatePfdTerrain() async {
