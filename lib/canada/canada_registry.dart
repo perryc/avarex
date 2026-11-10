@@ -35,6 +35,16 @@ class CanadaRegistry implements AircraftRegistry {
     _byIcao
       ..clear()
       ..addAll(entries);
+    // The reverse index has to be built here, not at the call sites: load()
+    // comes through seed() too, and without it lookupMark could only ever
+    // answer by the C-F/C-G formula and never from the register itself.
+    _byMark.clear();
+    entries.forEach((int icao, CanadaAircraft a) {
+      final String mark = normalizeMark(a.mark);
+      if (mark.isNotEmpty) {
+        _byMark["C-$mark"] = icao;
+      }
+    });
     change.value++;
   }
 

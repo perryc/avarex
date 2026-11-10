@@ -63,4 +63,23 @@ void main() {
     expect(v.displayLabel, "C-FAAA");
     Storage().canadaRegistry.clear();
   });
+
+  test("a mark in the register resolves even outside the C-F/C-G formula", () {
+    // Ultralights (C-I...) and out-of-sequence allocations are in the register
+    // but no formula produces them, so the reverse index is the only route.
+    Storage().canadaRegistry.seed({
+      0xC01521: const CanadaAircraft("C-IAA", "PA-12", "PIPER"),
+      0xC0ABCD: const CanadaAircraft("CGXYZ", "RV-10", "VANS"),
+    });
+    expect(Storage().canadaRegistry.lookupMark("C-IAA"), 0xC01521);
+    expect(Storage().canadaRegistry.lookupMark("c-iaa"), 0xC01521);
+    expect(Storage().canadaRegistry.lookupIcao("CIAA"), 0xC01521);
+    // the register wins over the formula when they disagree
+    expect(Storage().canadaRegistry.lookupMark("C-GXYZ"), 0xC0ABCD);
+    expect(CanadaRegistry.formulaIcao("GXYZ"), isNot(0xC0ABCD));
+    // and a mark in neither still falls back to the formula
+    expect(Storage().canadaRegistry.lookupMark("C-FMHP"), 0xC02076);
+    Storage().canadaRegistry.clear();
+    expect(Storage().canadaRegistry.lookupMark("C-IAA"), isNull);
+  });
 }
