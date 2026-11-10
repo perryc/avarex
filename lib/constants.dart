@@ -118,6 +118,8 @@ class Constants {
   static final bool shouldShowBluetoothSpp = (Platform.isAndroid);
   // Phones and tablets on the same Wi-Fi can share a plan. No sockets on web.
   static final bool shouldShowDeviceLink = !kIsWeb;
+  // BLE works on iOS too, unlike classic SPP.
+  static final bool shouldShowBle = (Platform.isAndroid || Platform.isIOS || Platform.isMacOS);
   static final bool shouldShouldReview = (Platform.isMacOS || Platform.isIOS | Platform.isAndroid || Platform.isWindows);
   static final bool shouldShowProServices = (Platform.isIOS || Platform.isAndroid);
 

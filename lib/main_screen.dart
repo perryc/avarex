@@ -480,7 +480,7 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver { //
                             },
                           ),
                       ],
-                      if (Constants.shouldShowBluetoothSpp || Constants.shouldShowDeviceLink) ...[
+                      if (Constants.shouldShowBluetoothSpp || Constants.shouldShowBle || Constants.shouldShowDeviceLink) ...[
                         const SizedBox(height: 8),
                         _buildSectionHeader(context, "Connectivity"),
                         if (Constants.shouldShowDeviceLink)
@@ -494,7 +494,7 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver { //
                               Navigator.pushNamed(context, '/link');
                             },
                           ),
-                        if (Constants.shouldShowBluetoothSpp)
+                        if (Constants.shouldShowBluetoothSpp || Constants.shouldShowBle)
                           _buildMenuItem(
                             context,
                             icon: Icons.compare_arrows_rounded,

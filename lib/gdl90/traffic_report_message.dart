@@ -5,6 +5,7 @@ import 'package:avaremp/storage.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'message.dart';
+import 'package:avaremp/registry/aircraft_registry.dart';
 
 /// Why a traffic report was dropped by TrafficCache (not shown on the map).
 /// Used by the ADS-B status log to color-code filtered aircraft.
