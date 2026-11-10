@@ -533,7 +533,10 @@ class DownloadScreenState extends State<DownloadScreen> {
   Future<void> _getChartStateFromLocal(Chart chart) async {
     String cycle = await Download.getChartCycleLocal(chart);
     bool expired = await Download.isChartExpired(chart);
-    String range = FaaDates.getVersionRange(cycle);
+    // Canada's version is the date it was imported, not an FAA cycle, so
+    // FaaDates would render it as a meaningless range.
+    String version = chart.download is CanadaDownload
+        ? "Downloaded $cycle" : "$cycle ${FaaDates.getVersionRange(cycle)}";
     setState(() {
       if(cycle.isEmpty) {
         chart.state = _stateAbsentNone;
@@ -541,11 +544,11 @@ class DownloadScreenState extends State<DownloadScreen> {
       }
       else if(expired) {
         chart.state = _stateExpiredNone;
-        chart.subtitle = "$cycle $range";
+        chart.subtitle = version;
       }
       else {
         chart.state = _stateCurrentNone;
-        chart.subtitle = "$cycle $range";
+        chart.subtitle = version;
       }
       _updateChart(chart);
       _updateCategory();
