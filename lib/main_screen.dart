@@ -332,6 +332,16 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver { //
                       ),
                       _buildMenuItem(
                         context,
+                        icon: MdiIcons.bookOpenPageVariant,
+                        title: "Canadian CFS Import",
+                        subtitle: "Aerodromes from your Flight Supplement",
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.pushNamed(context, '/cfs');
+                        },
+                      ),
+                      _buildMenuItem(
+                        context,
                         icon: MdiIcons.fileDocument,
                         title: "Documents",
                         subtitle: "Weather, manuals, notes, tracks",

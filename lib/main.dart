@@ -1,5 +1,6 @@
 import 'package:avaremp/logbook/logbook_screen.dart';
 import 'package:avaremp/instruments/pfd_screen.dart';
+import 'package:avaremp/canada/cfs_screen.dart';
 import 'package:avaremp/longpress_screen.dart';
 import 'package:avaremp/place/airspace_3d_screen.dart';
 import 'package:avaremp/place/weather_3d_screen.dart';
@@ -109,6 +110,7 @@ class MainApp extends StatelessWidget {
                   : const MainScreen(),
               '/download': (context) => const DownloadScreen(),
               '/documents': (context) => const DocumentsScreen(),
+              '/cfs': (context) => const CfsScreen(),
               '/checklists': (context) => const ChecklistScreen(),
               '/performance': (context) => const AircraftPerformanceScreen(),
               '/logbook': (context) => const LogbookScreen(),

@@ -1,3 +1,4 @@
+import 'package:avaremp/canada/cfs_page_view.dart';
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:avaremp/ai/ai_screen.dart';
 import 'package:avaremp/business/airport_businesses_gate.dart';
@@ -9,6 +10,7 @@ import 'package:avaremp/map_screen.dart';
 import 'package:avaremp/place/saa.dart';
 import 'package:avaremp/place/airspace_3d_view.dart';
 import 'package:avaremp/plan/hold_tab.dart';
+import 'package:avaremp/utils/openair_parser.dart';
 import 'package:avaremp/storage.dart';
 import 'package:avaremp/destination/nav.dart';
 import 'package:avaremp/utils/toast.dart';
@@ -42,6 +44,7 @@ class LongPressFuture {
   final Destination _destination;
   Destination show;
   List<Saa> saa = [];
+  List<OpenAirAirspace> caAirspace = [];
   List<NavDestination>? navs;
 
   LongPressFuture(this._destination) : show =
@@ -56,6 +59,7 @@ class LongPressFuture {
     show = await DestinationFactory.make(_destination);
     navs = await MainDatabaseHelper.db.findNearestVOR(_destination.coordinate);
     saa = await MainDatabaseHelper.db.getSaa(_destination.coordinate);
+    caAirspace = Storage().canadaAirspace.at(_destination.coordinate);
   }
 
   Future<LongPressFuture> getAll() async {
@@ -67,7 +71,7 @@ class LongPressFuture {
 class LongPressScreenState extends State<LongPressScreen> {
 
   int _index = 0;
-  static const List<String> labels = ["Main", "AD", "METAR", "NOTAM", "SUA", "Wind", "3D", "3DW", "ST", "Business"];
+  static const List<String> labels = ["Main", "AD", "CFS", "METAR", "NOTAM", "SUA", "Wind", "3D", "3DW", "ST", "Business"];
 
   late Future<LongPressFuture> _loadFuture;
 
@@ -337,6 +341,14 @@ class LongPressScreenState extends State<LongPressScreen> {
       }
     }
 
+    // Canadian aerodromes carry their own page in the Flight Supplement; the
+    // view says so itself when the ident is in no imported volume.
+    if(showDestination is AirportDestination &&
+        showDestination.locationID.toUpperCase().startsWith("C")) {
+      pages[labels.indexOf("CFS")] =
+          CfsPageView(ident: showDestination.locationID);
+    }
+
     pages[labels.indexOf("3D")] = Airspace3DView(
       center: showDestination.coordinate,
       ownship: Storage().gpsChange,
@@ -352,7 +364,7 @@ class LongPressScreenState extends State<LongPressScreen> {
     );
     pages[labels.indexOf("ST")] = Sounding.getSoundingImage(showDestination.coordinate, context);
 
-    if (future.saa.isNotEmpty) {
+    if (future.saa.isNotEmpty || future.caAirspace.isNotEmpty) {
       pages[labels.indexOf("SUA")] = ListView(
         padding: const EdgeInsets.all(8),
         children: [
@@ -361,6 +373,14 @@ class LongPressScreenState extends State<LongPressScreen> {
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: s.toWidget(),
+              ),
+            ),
+          for (OpenAirAirspace a in future.caAirspace)
+            Card(
+              child: ListTile(
+                title: Text("${a.cls} ${a.name}"),
+                subtitle: Text("${a.floor} - ${a.ceiling}"
+                    "${a.frequency.isEmpty ? '' : '  ${a.frequency}'}"),
               ),
             ),
         ],

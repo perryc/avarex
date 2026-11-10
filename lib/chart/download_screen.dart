@@ -1,4 +1,5 @@
 
+import 'package:avaremp/canada/canada_download.dart';
 import 'package:avaremp/utils/faa_dates.dart';
 import 'package:avaremp/storage.dart';
 import 'package:avaremp/utils/toast.dart';
@@ -532,7 +533,10 @@ class DownloadScreenState extends State<DownloadScreen> {
   Future<void> _getChartStateFromLocal(Chart chart) async {
     String cycle = await Download.getChartCycleLocal(chart);
     bool expired = await Download.isChartExpired(chart);
-    String range = FaaDates.getVersionRange(cycle);
+    // Canada's version is the date it was imported, not an FAA cycle, so
+    // FaaDates would render it as a meaningless range.
+    String version = chart.download is CanadaDownload
+        ? "Downloaded $cycle" : "$cycle ${FaaDates.getVersionRange(cycle)}";
     setState(() {
       if(cycle.isEmpty) {
         chart.state = _stateAbsentNone;
@@ -540,11 +544,11 @@ class DownloadScreenState extends State<DownloadScreen> {
       }
       else if(expired) {
         chart.state = _stateExpiredNone;
-        chart.subtitle = "$cycle $range \u00b7 expired";
+        chart.subtitle = "$version \u00b7 expired";
       }
       else {
         chart.state = _stateCurrentNone;
-        chart.subtitle = "$cycle $range";
+        chart.subtitle = version;
       }
       _updateChart(chart);
       _updateCategory();
@@ -629,7 +633,11 @@ class DownloadScreenState extends State<DownloadScreen> {
 
   // replace expired data with a fresh download
   void _refresh(Chart ct) {
-    Storage().downloadManager.deleteSilent(ct);
+    // the Canada import purges its old rows itself; a separate delete would
+    // race the download and remove the files it is writing
+    if(ct.download is! CanadaDownload) {
+      Storage().downloadManager.deleteSilent(ct);
+    }
     Storage().downloadManager.download(ct, _nextCycle, _backupServer);
   }
 
@@ -689,6 +697,14 @@ class DownloadScreenState extends State<DownloadScreen> {
         Chart('FAA Handbooks Specialty',  _absentColor, _absentIcon, 'FAA_HANDBOOKS_SPECIALTY', _stateAbsentNone, "", ValueNotifier<int>(0), true, Download(), true),
         Chart('FAA ACS',                  _absentColor, _absentIcon, 'FAA_ACS',                 _stateAbsentNone, "", ValueNotifier<int>(0), true, Download(), true),
         Chart('FAA Advisory Circulars',   _absentColor, _absentIcon, 'FAA_AC',                  _stateAbsentNone, "", ValueNotifier<int>(0), true, Download(), true),
+      ],
+      false,
+    ),
+    ChartCategory(
+      ChartCategory.canada,
+      _absentColor,
+      [
+        Chart('Canada (Airspace + Register)', _absentColor, _absentIcon, CanadaDownload.filename, _stateAbsentNone, "", ValueNotifier<int>(0), true, CanadaDownload(), true),
       ],
       false,
     ),

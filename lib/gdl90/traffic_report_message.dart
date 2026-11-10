@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:avaremp/registry/aircraft_registry.dart';
 import 'package:avaremp/gdl90/ownship_message.dart';
 import 'package:avaremp/storage.dart';
 import 'package:latlong2/latlong.dart';
@@ -21,6 +22,54 @@ class TrafficReportMessage extends Message {
   double verticalSpeed = 0;
   double heading = 0;
   String callSign = "";
+
+  /// Best display identity: broadcast callsign, else a registration derived
+  /// from the ICAO address where the national allocation is algorithmic
+  /// (Canada C00001..C0889A maps linearly to C-FAAA..C-GZZZ), else hex ICAO.
+  String get displayId {
+    final String call = effectiveCallSign;
+    if(call.isNotEmpty) {
+      return call;
+    }
+    final RegisteredAircraft? reg = Storage().aircraftRegistry.lookup(icao);
+    if(reg != null) {
+      return reg.mark;
+    }
+    if(icao >= 0xC00001 && icao <= 0xC00001 + 2 * 26 * 26 * 26 - 1) {
+      int offset = icao - 0xC00001;
+      String first = offset < 26 * 26 * 26 ? "F" : "G";
+      offset %= 26 * 26 * 26;
+      String l(int v) => String.fromCharCode(65 + v);
+      return "C-$first${l(offset ~/ 676)}${l((offset ~/ 26) % 26)}${l(offset % 26)}";
+    }
+    return icao.toRadixString(16).toUpperCase();
+  }
+  // SoftRF fills an empty callsign with a two-letter protocol prefix plus
+  // the hex address ("FAD2730C"); that is not an ident, so treat it as empty.
+  static final RegExp _softRfSubstitute =
+      RegExp(r'^(FL|OG|PA|AB|UA|FA|HA|AL)([0-9A-F]{6})$');
+
+  /// The broadcast callsign, or "" when it is only a generated placeholder.
+  String get effectiveCallSign {
+    final RegExpMatch? m = _softRfSubstitute.firstMatch(callSign);
+    if(m != null && int.parse(m.group(2)!, radix: 16) == icao) {
+      return "";
+    }
+    return callSign;
+  }
+
+  /// Aircraft model from the Canadian register, else "".
+  String get model => Storage().aircraftRegistry.lookup(icao)?.model ?? "";
+
+  /// Map label: ident plus model when known ("C-FMHP RV-10").
+  String get displayLabel {
+    final String m = model;
+    if(m.isEmpty) {
+      return displayId;
+    }
+    return "$displayId ${m.length > 12 ? m.substring(0, 12) : m}";
+  }
+
   bool airborne = false;
   bool extrapolated = false;
   int emitter = 0;
@@ -139,7 +188,9 @@ class TrafficReportMessage extends Message {
   /// Fields common to traffic, basic and long reports.
   String commonDecode() {
     double kts = velocity / 0.514444;
+    final RegisteredAircraft? reg = Storage().aircraftRegistry.lookup(icao);
     return "Callsign: ${callSign.isEmpty ? "-" : callSign}\n"
+        "${reg == null ? "" : "Registered: ${reg.mark} ${reg.common} ${reg.model}\n"}"
         "ICAO: ${icao.toRadixString(16).toUpperCase().padLeft(6, '0')} ($icao)\n"
         "Latitude: ${coordinates.latitude.toStringAsFixed(5)}\u00b0\n"
         "Longitude: ${coordinates.longitude.toStringAsFixed(5)}\u00b0\n"

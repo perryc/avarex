@@ -1,3 +1,4 @@
+import 'package:avaremp/registry/aircraft_registry.dart';
 import 'dart:async';
 import 'package:avaremp/avidyne/avidyne_ifd.dart';
 import 'package:avaremp/instruments/autopilot.dart';
@@ -55,6 +56,9 @@ import 'package:avaremp/destination/destination.dart';
 import 'chart/download_manager.dart';
 import 'instruments/flight_timer.dart';
 import 'gdl90/message.dart';
+import 'package:avaremp/canada/canada_airspace.dart';
+import 'package:avaremp/canada/canada_import.dart';
+import 'package:avaremp/canada/canada_registry.dart';
 import 'utils/geojson_parser.dart';
 import 'io/gps.dart';
 import 'io/gps_kalman.dart';
@@ -124,6 +128,15 @@ class Storage {
   late UnitConversion units;
   final DownloadManager downloadManager = DownloadManager();
   final GeoJsonParser geoParser = GeoJsonParser();
+  final CanadaAirspace canadaAirspace = CanadaAirspace();
+  /// The Canadian register, concrete, for the Canada product and its tests.
+  final CanadaRegistry canadaRegistry = CanadaRegistry();
+
+  /// The same object seen as a region-neutral interface. lib/gdl90 and lib/io use
+  /// ONLY this, so traffic labelling never depends on a particular country's data:
+  /// point it at EmptyAircraftRegistry, or another authority's register, and the
+  /// receiver code is unchanged.
+  AircraftRegistry get aircraftRegistry => canadaRegistry;
   List<bool> activeChecklistSteps = [];
   String activeChecklistName = "";
   static const gpsSwitchoverTimeMs = 30000; // switch GPS in 30 seconds
@@ -522,6 +535,17 @@ class Storage {
 
     await checkChartsExist();
     await checkDataExpiry();
+
+    if(!kIsWeb) {
+      // restore Canadian data after a DatabasesX update or failed import,
+      // and show the airspace/airport layers; none of this needs the network
+      // or awaiting
+      CanadaImport.reimportIfInstalled()
+          .then((_) => canadaAirspace.loadAirports())
+          .then((_) => canadaRegistry.load());
+      canadaAirspace.loadFromFile(
+          CanadaImport.dataPath(CanadaImport.airspaceFile));
+    }
 
     winds = WeatherCache.make(WindsCache) as WindsCache;
     metar = WeatherCache.make(MetarCache) as MetarCache;
