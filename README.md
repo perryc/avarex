@@ -10,24 +10,68 @@ By Apps4Av.
 
 **📦 Try it: [download the latest APK](https://github.com/perryc/avarex/releases/latest)** (Android sideload; see release notes).
 
-This fork (`canadian-data` branch) adds Canadian airport and airspace
-support to AvareX:
+This fork (`canadian-data` branch) adds Canadian aerodrome and airspace
+support to AvareX.
 
-- A **Canada** item in the Download screen imports Canadian airports,
-  runways, frequencies, and navaids from [OurAirports](https://ourairports.com)
-  and Canadian airspace from the community-maintained OpenAir file on
-  [soaringweb.org](http://soaringweb.org/Airspace/NA/) (derived from Nav
-  Canada's Designated Airspace Handbook). Data refreshes on a 28-day cycle
-  and survives DatabasesX updates.
-- New **CA Airspace** and **CA Airports** map layers: VFR-styled airspace
-  polygons (control zones, MF areas, CYA/CYR/CYD; airspace above 12,500 ft
-  is not drawn) and clustered tappable airport markers.
-- `tools/` contains scripts for contributing missing runway/frequency data
-  back to OurAirports, including OCR of Garmin airport-page captures.
+### Aerodromes come from your own Canada Flight Supplement
 
-All of this is **unofficial data, not for navigation**. Coverage gaps are
-real — many small aerodromes lack runway/frequency data in OurAirports;
-help fill them in.
+The CFS is Nav Canada's own aerodrome directory, and it is the only
+source that has every registered aerodrome with its runway dimensions,
+surfaces, true bearings, full communications block, fuel and operator.
+It cannot be redistributed, so **nothing ships with the app**: you point
+it at the volumes you already have and they are parsed on the device.
+
+**Menu → Data → Canadian CFS Import** → *Choose files* (or *Choose a
+folder* on desktop), pick the volume PDFs, and wait. One volume of about
+a thousand pages takes a couple of seconds on a desktop and a little
+longer on a tablet.
+
+Measured against one real volume (Alberta, Saskatchewan and Manitoba,
+1059 pages):
+
+| | |
+|---|---|
+| aerodromes | 581 |
+| with a position / elevation | 98.1% / 100% |
+| landplane aerodromes with runway data | 100% |
+| with a frequency | 97.1% |
+| navaids / ILS | 68 / 12 |
+
+Each imported volume stays on the device so that **tapping a Canadian
+airport gives you its actual CFS page** — the procedures, cautions and
+operator hours that no database row can hold. A volume that has gone out
+of cycle is marked in amber with the date and keeps working; runways and
+frequencies rarely move, but check NOTAMs.
+
+Earlier versions took aerodromes from [OurAirports](https://ourairports.com),
+which is crowd-sourced and thin for Canada — no trustworthy surfaces, no
+true bearings, few frequencies, and whole aerodromes missing. That import
+is gone, and so is the need to contribute corrections back to it.
+
+### The rest
+
+- The **Canada** item in the Download screen now fetches only what the
+  supplement does not carry: Canadian airspace from the community
+  OpenAir file on [soaringweb.org](http://soaringweb.org/Airspace/NA/)
+  (derived from Nav Canada's Designated Airspace Handbook) and the
+  Transport Canada aircraft register, which labels traffic that
+  broadcasts no callsign. Refreshes on a 28-day cycle and survives
+  DatabasesX updates.
+- **CA Airspace** and **CA Airports** map layers: VFR-styled airspace
+  polygons (control zones, MF areas, CYA/CYR/CYD; airspace above
+  12,500 ft is not drawn) and sectional-style airport symbols drawn the
+  way a VNC draws them — open circle for an unpaved field, runways
+  through the circle for a paved one, the runway layout alone above
+  8069 ft, blue for towered, ticks for fuel.
+- Airports are found by **name as well as identifier**: "Springbank"
+  finds CYBW even though the entry is titled "CALGARY / SPRINGBANK".
+
+All of this is **unofficial data, not for navigation**.
+
+Note on reading the PDFs: this uses [pdfrx](https://pub.dev/packages/pdfrx)
+(pdfium) rather than the Syncfusion reader already in the app. The CFS is
+set in subset Type 1C fonts with no ToUnicode map, and Syncfusion returns
+glyph codes for exactly the runway and frequency lines that matter.
 
 Building this fork: the Firebase config files (`lib/firebase_options.dart`,
 `android/app/google-services.json`) are gitignored and must be created as
@@ -49,17 +93,29 @@ Target receivers:
   typed GDL90 characteristics, FIS-B uplink fragmentation (hello
   [CIFIB](https://cifib.ca)), and the full AT command console over BLE so
   any serial terminal app can configure it wirelessly.
+- **cb-tfc** — MIT-licensed firmware turning a [Seeed SenseCAP MeshTracker
+  X1](https://www.seeedstudio.com/) (nRF52840 + Semtech LR2021) into a
+  see-and-be-seen traffic device: 1090ES ADS-B and FANET on 915 MHz on the
+  one radio, time-sliced against GPS, both arriving over the same BLE
+  service. It transmits its own position on FANET, so two of them see each
+  other. **Currently in flight testing**; not published yet.
 - **[SoftRF Card Edition MkIII](https://github.com/lyusupov/SoftRF/wiki/Card-Edition-MkIII)**
   (~US$42) — LoRa radio covering FANET/OGN glider and paraglider traffic;
   connects as a second BLE receiver alongside the ADSBee (set it to
   Bluetooth LE + GDL90 output).
 
-The "$42 TCAS" plan: ADSBee on 1090ES + SoftRF on FANET, both feeding one
-merged BLE traffic picture in AvareX — transponder traffic, gliders, and
-paragliders on one moving map over Canadian charts and airspace, no WiFi
-juggling, for less than a fill-up. (It is, of course, not TCAS: unofficial
-data, no resolution advisories, not for navigation — it's extra eyes, not
-a certified system.)
+In development: a board carrying **1090ES, 978 UAT and 915 MHz together**,
+built around the ADSBee m1421 module — its LR2021 takes 1090 while the
+CC1314's own sub-GHz radio takes 978, including TIS-B and FIS-B, which
+matters north of the border only near a US ground station but matters a
+great deal south of it.
+
+The "$42 TCAS" plan: 1090ES plus FANET feeding one merged BLE traffic
+picture in AvareX — transponder traffic, gliders, and paragliders on one
+moving map over Canadian charts and airspace, no WiFi juggling, for less
+than a fill-up. (It is, of course, not TCAS: unofficial data, no
+resolution advisories, not for navigation — it's extra eyes, not a
+certified system.)
 
 Note: on the ADSBee 1090U, BLE mode and WiFi mode are mutually exclusive
 (the ESP32-S3 module lacks the RAM to run both radios' stacks); switch
