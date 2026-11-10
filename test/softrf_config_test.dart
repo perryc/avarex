@@ -1,4 +1,3 @@
-import 'package:avaremp/canada/canada_registry.dart';
 import 'package:avaremp/io/softrf_config.dart';
 import 'package:avaremp/storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -26,16 +25,16 @@ void main() {
         "Legacy (FLARM), band 1, TX off, GDL90 not on BT");
   });
 
-  test("registration resolves through register then formula", () {
-    Storage().canadaRegistry.seed({0xC01521: const CanadaAircraft("C-IAA", "PA-12", "PIPER")});
-    expect(SoftRfConfig.icaoForRegistration("c-iaa"), 0xC01521);
-    expect(SoftRfConfig.icaoForRegistration("CFMHP"), 0xC02076); // formula
-    expect(SoftRfConfig.icaoForRegistration("C-GZZZ"), 0xC00001 + 35151);
+  test("registration resolves by formula, or not at all without a register", () {
+    // No national register is installed in this build, so EmptyAircraftRegistry
+    // answers nothing and only the formulas and a bare address can resolve.
+    expect(Storage().aircraftRegistry.count, 0);
+    expect(Storage().aircraftRegistry.lookupIcao("C-FMHP"), isNull);
     expect(SoftRfConfig.icaoForRegistration("N12345"), 0xA061D9); // US formula
     expect(SoftRfConfig.icaoForRegistration("A12DB5"), 0xA12DB5); // bare address
-    expect(SoftRfConfig.icaoForRegistration("G-ABCD"), isNull);   // no formula
+    expect(SoftRfConfig.icaoForRegistration("C-FMHP"), isNull);   // needs a register
+    expect(SoftRfConfig.icaoForRegistration("G-ABCD"), isNull);
     expect(SoftRfConfig.icaoForRegistration(""), isNull);
-    Storage().canadaRegistry.clear();
   });
   test('N-numbers resolve to ICAO addresses', () {
     expect(SoftRfConfig.icaoForNNumber("N1"), 0xA00001);

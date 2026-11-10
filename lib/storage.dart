@@ -56,6 +56,7 @@ import 'chart/download_manager.dart';
 import 'instruments/flight_timer.dart';
 import 'gdl90/message.dart';
 import 'package:avaremp/io/ble_receiver.dart';
+import 'package:avaremp/registry/aircraft_registry.dart';
 import 'package:avaremp/io/reception_logger.dart';
 import 'utils/geojson_parser.dart';
 import 'io/gps.dart';
@@ -127,6 +128,11 @@ class Storage {
   final DownloadManager downloadManager = DownloadManager();
   final GeoJsonParser geoParser = GeoJsonParser();
   final BleReceiver bleReceiver = BleReceiver();
+
+  /// Traffic labelling and receiver configuration go through this interface only,
+  /// so they never depend on a particular country's data. With no national
+  /// register installed it answers nothing and targets simply show no mark.
+  final AircraftRegistry aircraftRegistry = EmptyAircraftRegistry();
   final ReceptionLogger receptionLogger = ReceptionLogger();
   List<bool> activeChecklistSteps = [];
   String activeChecklistName = "";

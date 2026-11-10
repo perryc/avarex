@@ -4,6 +4,7 @@ import 'package:avaremp/storage.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'message.dart';
+import 'package:avaremp/registry/aircraft_registry.dart';
 
 /// Why a traffic report was dropped by TrafficCache (not shown on the map).
 /// Used by the ADS-B status log to color-code filtered aircraft.
@@ -21,6 +22,36 @@ class TrafficReportMessage extends Message {
   double verticalSpeed = 0;
   double heading = 0;
   String callSign = "";
+
+  // SoftRF fills an empty callsign with a two-letter protocol prefix plus
+  // the hex address ("FAD2730C"); that is not an ident, so treat it as empty.
+  static final RegExp _softRfSubstitute =
+      RegExp(r'^(FL|OG|PA|AB|UA|FA|HA|AL)([0-9A-F]{6})$');
+
+  /// The broadcast callsign, or "" when it is only a generated placeholder.
+  String get effectiveCallSign {
+    final RegExpMatch? m = _softRfSubstitute.firstMatch(callSign);
+    if(m != null && int.parse(m.group(2)!, radix: 16) == icao) {
+      return "";
+    }
+    return callSign;
+  }
+
+  /// What to write beside the target: its ident if it broadcasts one, else the
+  /// mark from whatever register is installed, else the bare Mode S address.
+  /// Region-neutral by construction - see [AircraftRegistry].
+  String get displayId {
+    final String call = effectiveCallSign;
+    if(call.isNotEmpty) {
+      return call;
+    }
+    final RegisteredAircraft? reg = Storage().aircraftRegistry.lookup(icao);
+    if(reg != null) {
+      return reg.mark;
+    }
+    return icao.toRadixString(16).toUpperCase();
+  }
+
   bool airborne = false;
   bool extrapolated = false;
   int emitter = 0;
