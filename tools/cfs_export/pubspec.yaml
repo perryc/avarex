@@ -7,4 +7,5 @@ environment:
 
 dependencies:
   args: ^2.6.0
+  latlong2: ^0.9.0
   pdfrx_engine: ">=0.4.4 <1.0.0"

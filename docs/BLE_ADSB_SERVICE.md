@@ -60,6 +60,13 @@ the hardware is battery-powered.
     (FIS-B). Standard traffic reports erase the receive band and the
     heartbeat merges the counts, so this is how a client displays
     per-band totals (accumulate client-side).
+  - `0x02` **UTC date** (1 Hz on Status, once the receiver's GNSS has a
+    date): flags u8 (bit 0 = date valid), year u16 LE, month u8 (1-12),
+    day u8 (1-31), UTC seconds since midnight u32 LE; 10 bytes after the
+    message ID. The heartbeat carries only the time of day, so this is how
+    a client without its own GPS (or a clock that lost power) learns the
+    date. Sub-ID 0x01 is also ForeFlight's AHRS message (11 bytes) and the
+    per-band metrics (13 bytes): tell them apart by length.
 
 ### Fragmentation (Uplink characteristic only)
 
