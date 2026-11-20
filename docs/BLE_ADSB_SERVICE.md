@@ -68,6 +68,37 @@ the hardware is battery-powered.
     date. Sub-ID 0x01 is also ForeFlight's AHRS message (11 bytes) and the
     per-band metrics (13 bytes): tell them apart by length.
 
+### Transponder control (Control characteristic, optional)
+
+A receiver wired to a transponder's control input (cb-tfc-x3 to a
+uAvionix tailBeaconX over RS-232, sending SL70 `#AL` / `^MD`) lets the
+EFB act as the control head. The receiver owns the state: it keeps the
+last commanded mode and squawk across power cycles, drives the
+transponder about once a second, and the EFB only sends changes. NMEA
+checksum (XOR between `$` and `*`) on every sentence.
+
+EFB to receiver, written to Control:
+
+    $PSRFX,<mode>,<squawk>,<ident>*hh   change the transponder
+    $PSRFX,?*hh                          ask for the state
+
+Receiver to EFB, notified as text on Status - on every change, in reply
+to either sentence above, and every 5 s:
+
+    $PSRFX,<mode>,<squawk>,<ident>,<link>,<alt>*hh
+
+| field | values |
+|---|---|
+| mode | `S` standby, `A` on (Mode A), `C` alt (Mode C) - SL70 `O` / `A` / `C` |
+| squawk | four octal digits, e.g. `1200` |
+| ident | command: `1` starts an ident, which the receiver ends after 18 s; `0` leaves it alone. Reply: `1` while an ident is on |
+| link | `1` while the receiver is driving the transponder |
+| alt | pressure altitude sent to the transponder (`#AL`), feet; empty when there is none |
+
+A receiver without a transponder ignores `$PSRFX` (or replies with link
+`0`). An EFB treats the state as unknown when no reply has arrived for
+12 s.
+
 ### Fragmentation (Uplink characteristic only)
 
 FIS-B uplink frames (~450 bytes framed, worst-case larger after byte
