@@ -1,5 +1,5 @@
 name: cfs_export
-description: Builds canada.efb (the efb-p4 cockpit display's aerodrome file) from Canada Flight Supplement PDFs, with the app's own CFS parser.
+description: Builds canada.efb (the cb-tfc-disp cockpit display's aerodrome file) from Canada Flight Supplement PDFs, with the app's own CFS parser.
 publish_to: none
 
 environment:

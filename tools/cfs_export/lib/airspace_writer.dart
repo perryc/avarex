@@ -1,5 +1,5 @@
 // Writes airspace.efb: Canadian airspace (the soaringweb.org OpenAir file,
-// derived from Nav Canada's Designated Airspace Handbook) for the efb-p4 map.
+// derived from Nav Canada's Designated Airspace Handbook) for the cb-tfc-disp map.
 //
 // Little-endian, records 4-byte aligned, text in a NUL-terminated UTF-8 pool
 // referenced by offset (0 = ""), CRC-32 trailer:
@@ -12,8 +12,8 @@
 //
 // As AvareX's map, airspace with a floor at or above 12,500 ft is left out:
 // it blankets the country and doesn't matter to VFR below it.
-// The C++ reader is components/efb_core/include/efb/navdb/airspace.hpp in
-// efb-p4; change both together and bump kAirspaceVersion.
+// The C++ reader is components/disp_core/include/disp/navdb/airspace.hpp in
+// cb-tfc-disp; change both together and bump kAirspaceVersion.
 
 import 'dart:convert';
 import 'dart:typed_data';

@@ -1,5 +1,5 @@
 // Writes canada.efb: the aerodromes of one or more parsed CFS volumes in the
-// flat binary layout the efb-p4 firmware loads straight into memory.
+// flat binary layout the cb-tfc-disp firmware loads straight into memory.
 //
 // Little-endian throughout. Records are fixed size and 4-byte aligned; text
 // lives in one string pool of NUL-terminated UTF-8, referenced by byte offset
@@ -14,7 +14,7 @@
 //   strings     pool
 //   crc32        4 bytes
 //
-// The C++ reader is components/efb_core/include/efb/navdb/navdb.hpp in efb-p4;
+// The C++ reader is components/disp_core/include/disp/navdb/navdb.hpp in cb-tfc-disp;
 // change both together and bump kVersion.
 
 import 'dart:convert';

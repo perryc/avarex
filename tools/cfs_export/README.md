@@ -1,7 +1,7 @@
 # cfs_export
 
 Builds `canada.efb`, the aerodrome file for the
-[efb-p4](../../../efb-p4) cockpit display (Waveshare ESP32-P4). The source is your
+[cb-tfc-disp](../../../cb-tfc-disp) cockpit display (Waveshare ESP32-P4). The source is your
 own Canada Flight Supplement volumes, read with the same parser the app's CFS
 import uses (`lib/canada/cfs_parse.dart`). As with the app, nothing from the
 supplement is redistributed: you build the file from your own copy and put it
@@ -18,5 +18,5 @@ newest edition wins. If the app has already imported a volume, `--json` takes
 the parse cache it keeps (`<dataDir>/canada/cfs/<file>.pdf.json`), so the PDF
 isn't read again.
 
-`lib/efb_writer.dart` documents the binary layout. Its C++ reader in efb-p4
+`lib/efb_writer.dart` documents the binary layout. Its C++ reader in cb-tfc-disp
 must change with it.

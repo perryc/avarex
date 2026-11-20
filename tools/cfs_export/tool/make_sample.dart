@@ -1,7 +1,7 @@
 // Writes sample.efb: a few made-up aerodromes (no supplement data) for the
-// efb-p4 reader's tests, so both sides of the format are checked together.
+// cb-tfc-disp reader's tests, so both sides of the format are checked together.
 //
-//   dart run tool/make_sample.dart ../../../efb-p4/host_test/fixtures/sample.efb
+//   dart run tool/make_sample.dart ../../../cb-tfc-disp/host_test/fixtures/sample.efb
 
 import 'dart:io';
 

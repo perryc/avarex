@@ -1,4 +1,4 @@
-// Builds airspace.efb for the efb-p4 map from the soaringweb.org Canadian
+// Builds airspace.efb for the cb-tfc-disp map from the soaringweb.org Canadian
 // OpenAir file (the one AvareX's Canada download fetches).
 //
 //   dart run bin/airspace_export.dart CanAirspace323all.txt -o airspace.efb

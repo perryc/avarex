@@ -1,4 +1,4 @@
-// Builds canada.efb for the efb-p4 cockpit display from Canada Flight
+// Builds canada.efb for the cb-tfc-disp cockpit display from Canada Flight
 // Supplement volumes, with the same parser the app's CFS import uses
 // (lib/canada/cfs_parse.dart).
 //
